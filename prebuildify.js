@@ -147,23 +147,15 @@ function runPrebuild(targetLabel, targetSpec) {
 	args.push('--target', targetSpec);
 
     // Force C++20 for Node 25+ V8 headers that use C++20 template features.
-    // On macOS, GYP's make generator ignores cflags_cc from binding.gyp.
-    // We pass the flag via GYP_DEFINES which node-gyp passes to GYP.
     const buildEnv = {
         ...process.env,
-        CXXFLAGS: '-std=c++20',
-        // This tells GYP to append these flags
-        GYP_DEFINES: 'clang=1',
     };
 
     if (process.platform === 'darwin') {
-        // On macOS, pass C++20 flag via node-gyp's devdir mechanism won't help.
-        // Instead, we'll modify the args to pass through node-gyp.
-        buildEnv.CXXFLAGS = '-std=c++20 -stdlib=libc++';
+        // On macOS, GYP's make generator ignores cflags_cc from binding.gyp.
+        // Force verbose make output to see actual compiler command.
+        buildEnv.MAKEFLAGS = 'V=1';
     }
-
-    // Add verbose flag to debug what's happening
-    args.push('-v');
 
     execSync(args.join(' '), {
         stdio: 'inherit',
