@@ -30,10 +30,6 @@ function loadBinding() {
 	var platform = process.platform;
 	var archName = process.arch;
 	var nodeVersion = process.versions.node.split('.')[0] + '.0.0';
-	if (platform === 'darwin') {
-		// macOS uses universal binaries
-		archName = 'x86_64+arm';
-	}
 
 	// Check if running in Electron
 	var isElectron = !!(process.versions && process.versions.electron);

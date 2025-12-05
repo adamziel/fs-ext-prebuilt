@@ -23,10 +23,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS builds universal binaries (x64 + arm64)
+          # macOS arm64 (Apple Silicon)
           - os: macos
-            arch: universal
+            arch: arm64
             runner: macos-14
+          # macOS x64 (Intel)
+          - os: macos
+            arch: x64
+            runner: macos-13
           # Linux x64
           - os: linux
             arch: x64
@@ -151,7 +155,7 @@ jobs:
             git commit -m "chore: refresh fs-ext prebuilds
 
           Platforms:
-          - macOS: universal (x64 + arm64)
+          - macOS: x64, arm64
           - Linux: x64, arm64
           - Windows: x64, arm64
 

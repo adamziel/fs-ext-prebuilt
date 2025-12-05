@@ -130,15 +130,11 @@ async function resolveElectronVersion() {
 }
 
 // Determine which architectures to build for based on platform.
-// On macOS we build universal binaries. On Linux/Windows we build for the
-// native architecture only (CI uses separate runners for x64 and arm64).
+// We build for the native architecture only. CI uses separate runners for
+// each platform/architecture combination.
 function getArchitectures() {
-	if (process.platform === 'darwin') {
-		// macOS supports universal binaries
-		return ['x86_64+arm'];
-	}
-	// Linux and Windows: build for native architecture only.
-	// CI uses separate runners for x64 and arm64.
+	// Always build for native architecture only.
+	// CI uses separate runners for x64 and arm64 on all platforms.
 	return [process.arch];
 }
 
@@ -239,10 +235,7 @@ function runPrebuild(targetLabel, targetSpec) {
 	);
 	console.log(`Electron target: ${electronVersion}`);
 	const architectures = getArchitectures();
-	const archDisplay = process.platform === 'darwin'
-		? 'arm64+x86_64 (universal)'
-		: architectures.join(', ');
-	console.log(`Architectures: ${archDisplay}`);
+	console.log(`Platform: ${process.platform}, Architecture: ${architectures.join(', ')}`);
 
 	cleanDir(BIN_DIR);
 
