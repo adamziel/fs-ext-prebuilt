@@ -11,7 +11,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
 const BIN_DIR = path.join(ROOT, 'binaries');
@@ -137,7 +137,10 @@ function runPrebuild(targetLabel, targetSpec) {
 	// On macOS, build universal binaries (x86_64+arm). On other platforms, build native arch only.
 	// Windows hangs when trying to cross-compile for ARM without the proper toolchain.
 	const arch = process.platform === 'darwin' ? 'x86_64+arm' : process.arch;
-	const args = ['npx', '--yes', 'prebuildify', '--arch', arch];
+
+	// Use locally installed prebuildify instead of npx to avoid download hangs on Windows
+	const prebuildifyBin = path.join(ROOT, 'node_modules', '.bin', 'prebuildify');
+	const args = [prebuildifyBin, '--arch', arch];
 
 	if (STRIP_SUPPORTED) {
 		args.push('--strip');
@@ -149,12 +152,22 @@ function runPrebuild(targetLabel, targetSpec) {
 
 	args.push('--target', targetSpec);
 
-    execSync(args.join(' '), {
+	console.log(`Running: ${args.join(' ')}`);
+
+    const result = spawnSync(args[0], args.slice(1), {
         stdio: 'inherit',
         cwd: ROOT,
         // 10 minute timeout per build target to prevent hanging builds
         timeout: 600000,
+		shell: process.platform === 'win32',
     });
+
+	if (result.error) {
+		throw result.error;
+	}
+	if (result.status !== 0) {
+		throw new Error(`prebuildify exited with code ${result.status}`);
+	}
 
 	const osDirs = fs
 		.readdirSync(PREBUILD_DIR, { withFileTypes: true })
