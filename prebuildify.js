@@ -146,17 +146,23 @@ function runPrebuild(targetLabel, targetSpec) {
 
 	args.push('--target', targetSpec);
 
+    // On macOS, GYP's make generator ignores cflags_cc from binding.gyp.
+    // We must force C++20 via CXX environment variable for Node 25+ V8 headers.
+    const buildEnv = {
+        ...process.env,
+        CXXFLAGS: `${process.env.CXXFLAGS || ''} -std=c++20`.trim(),
+    };
+
+    if (process.platform === 'darwin') {
+        // Force clang++ with C++20 on macOS
+        const cxx = process.env.CXX || 'clang++';
+        buildEnv.CXX = `${cxx} -std=c++20`;
+    }
+
     execSync(args.join(' '), {
         stdio: 'inherit',
         cwd: ROOT,
-        env: {
-            ...process.env,
-            // Force C++20 so Node 25/V8 builds succeed on all toolchains.
-            // node-gyp respects npm_config_* variables for compiler flags.
-            // CXXFLAGS alone doesn't work because node-gyp doesn't read it directly.
-            CXXFLAGS: `${process.env.CXXFLAGS || ''} -std=c++20`.trim(),
-            npm_config_cxxflags: '-std=c++20',
-        },
+        env: buildEnv,
     });
 
 	const osDirs = fs
