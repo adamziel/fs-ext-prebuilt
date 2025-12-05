@@ -41,6 +41,12 @@ jobs:
           check-latest: true
           cache: 'npm'
 
+      - name: Install LLVM Clang (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
+
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
@@ -49,6 +55,9 @@ jobs:
           NODE_VERSIONS: ${{ inputs.node_versions }}
           ELECTRON_VERSION: ${{ inputs.electron_version }}
           REFRESH_ABI: 1
+          # Use LLVM Clang on macOS for full C++20 NTTP support (Apple Clang lacks it)
+          CC: ${{ runner.os == 'macOS' && 'clang' || '' }}
+          CXX: ${{ runner.os == 'macOS' && 'clang++' || '' }}
         run: node prebuildify.js
 
       - name: Upload binaries
