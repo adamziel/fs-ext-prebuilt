@@ -149,6 +149,8 @@ function runPrebuild(targetLabel, targetSpec) {
     execSync(args.join(' '), {
         stdio: 'inherit',
         cwd: ROOT,
+        // 10 minute timeout per build target to prevent hanging builds
+        timeout: 600000,
     });
 
 	const osDirs = fs
