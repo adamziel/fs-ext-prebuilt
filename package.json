@@ -34,6 +34,7 @@
 		"web": "https://github.com/baudehlo/node-fs-ext/issues"
 	},
 	"scripts": {
+		"prebuilds": "node ./prebuildify.js",
 		"install": "node-gyp configure build",
 		"test": "node ./run_tests",
 		"lint": "node ./node_modules/eslint/bin/eslint \"*.js\" \"tests/**/*.js\"",

@@ -332,7 +332,7 @@ endif
 
 quiet_cmd_regen_makefile = ACTION Regenerating $@
 cmd_regen_makefile = cd $(srcdir); /Users/cloudnik/www/Automattic/core/plugins/wordpress-playground/node_modules/node-gyp/gyp/gyp_main.py -fmake --ignore-environment "-Dlibrary=shared_library" "-Dvisibility=default" "-Dnode_root_dir=/var/folders/sb/cywb762129g3f0jzq1_p2q5h0000gp/T/prebuildify/electron/38.2.2" "-Dnode_gyp_dir=/Users/cloudnik/www/Automattic/core/plugins/wordpress-playground/node_modules/node-gyp" "-Dnode_lib_file=/var/folders/sb/cywb762129g3f0jzq1_p2q5h0000gp/T/prebuildify/electron/38.2.2/<(target_arch)/node.lib" "-Dmodule_root_dir=/Users/cloudnik/www/Automattic/core/plugins/wordpress-playground/fs-ext-prebuilt/src/package" "-Dnode_engine=v8" "--depth=." "-Goutput_dir=." "--generator-output=build" -I/Users/cloudnik/www/Automattic/core/plugins/wordpress-playground/fs-ext-prebuilt/src/package/build/config.gypi -I/Users/cloudnik/www/Automattic/core/plugins/wordpress-playground/node_modules/node-gyp/addon.gypi -I/var/folders/sb/cywb762129g3f0jzq1_p2q5h0000gp/T/prebuildify/electron/38.2.2/include/node/common.gypi "--toplevel-dir=." binding.gyp
-Makefile: $(srcdir)/binding.gyp $(srcdir)/../../../../../../../../../../private/var/folders/sb/cywb762129g3f0jzq1_p2q5h0000gp/T/prebuildify/electron/38.2.2/include/node/common.gypi $(srcdir)/build/config.gypi $(srcdir)/../../../node_modules/node-gyp/addon.gypi
+Makefile: $(srcdir)/../../../node_modules/node-gyp/addon.gypi $(srcdir)/build/config.gypi $(srcdir)/../../../../../../../../../../private/var/folders/sb/cywb762129g3f0jzq1_p2q5h0000gp/T/prebuildify/electron/38.2.2/include/node/common.gypi $(srcdir)/binding.gyp
 	$(call do_cmd,regen_makefile)
 
 # "all" is a concatenation of the "all" targets from all the included
