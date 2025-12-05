@@ -146,21 +146,9 @@ function runPrebuild(targetLabel, targetSpec) {
 
 	args.push('--target', targetSpec);
 
-    // Force C++20 for Node 25+ V8 headers that use C++20 template features.
-    const buildEnv = {
-        ...process.env,
-    };
-
-    if (process.platform === 'darwin') {
-        // On macOS, GYP's make generator ignores cflags_cc from binding.gyp.
-        // Force verbose make output to see actual compiler command.
-        buildEnv.MAKEFLAGS = 'V=1';
-    }
-
     execSync(args.join(' '), {
         stdio: 'inherit',
         cwd: ROOT,
-        env: buildEnv,
     });
 
 	const osDirs = fs
