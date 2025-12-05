@@ -41,7 +41,13 @@ function loadBinding() {
 
 	// Try to find matching binaries
 	var binariesDir = path.join(__dirname, 'binaries');
-	var files = fs.readdirSync(binariesDir);
+	var files;
+	try {
+		files = fs.readdirSync(binariesDir);
+	} catch (e) {
+		// Binaries directory doesn't exist, fall back to build
+		return null;
+	}
 
 	// Build the expected filename pattern
 	// Format: fs-ext-{platform}-{arch}[-libc]-{runtime}-{version}.node
@@ -62,8 +68,11 @@ function loadBinding() {
 			return f.includes('electron-' + electronVersion);
 		});
 		if (electronBinary) {
-			var loaded = tryLoad(path.join(binariesDir, electronBinary));
-			if (loaded) return loaded;
+			try {
+				return require(path.join(binariesDir, electronBinary));
+			} catch (e) {
+				// Failed to load, continue to Node binary
+			}
 		}
 	}
 
@@ -101,8 +110,8 @@ function loadBinding() {
 		return require(path.join(binariesDir, nodeBinary));
 	}
 
-	// Fall back to build
-	return require('./build/Release/fs_ext.node');
+	// No matching prebuilt found
+	return null;
 }
 
 // Try loading prebuilt binaries, fallback to the node-gyp built binary
@@ -110,10 +119,21 @@ let binding;
 try {
 	binding = loadBinding();
 	if (!binding) {
-		throw new Error('Failed to load binding');
+		// No prebuilt found, try the local build
+		binding = require('./build/Release/fs_ext.node');
 	}
 } catch (e) {
-	binding = require('./build/Release/fs_ext.node');
+	// loadBinding threw an error, try local build as last resort
+	try {
+		binding = require('./build/Release/fs_ext.node');
+	} catch (buildError) {
+		throw new Error(
+			'Failed to load fs-ext native module. ' +
+			'No prebuilt binary found for ' + process.platform + '-' + process.arch +
+			' (Node ' + process.version + '), and no local build available. ' +
+			'Original error: ' + e.message
+		);
+	}
 }
 
 // Used by flock

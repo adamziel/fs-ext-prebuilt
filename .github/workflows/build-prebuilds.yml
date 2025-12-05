@@ -88,6 +88,10 @@ jobs:
           REFRESH_ABI: 1
         run: node prebuildify.js
 
+      - name: List built binaries
+        run: ls -la binaries/
+        shell: bash
+
       - name: Run tests
         run: npm test
 
