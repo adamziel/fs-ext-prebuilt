@@ -134,7 +134,10 @@ function runPrebuild(targetLabel, targetSpec) {
 
     fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
 
-	const args = ['npx', '--yes', 'prebuildify', '--arch', 'x86_64+arm'];
+	// On macOS, build universal binaries (x86_64+arm). On other platforms, build native arch only.
+	// Windows hangs when trying to cross-compile for ARM without the proper toolchain.
+	const arch = process.platform === 'darwin' ? 'x86_64+arm' : process.arch;
+	const args = ['npx', '--yes', 'prebuildify', '--arch', arch];
 
 	if (STRIP_SUPPORTED) {
 		args.push('--strip');
@@ -199,7 +202,8 @@ function runPrebuild(targetLabel, targetSpec) {
 		`Building prebuilds for Node.js versions: ${nodeVersions.join(', ')}`
 	);
 	console.log(`Electron target: ${electronVersion}`);
-	console.log(`Architectures: arm64+x86_64`);
+	const targetArch = process.platform === 'darwin' ? 'arm64+x86_64 (universal)' : process.arch;
+	console.log(`Architectures: ${targetArch}`);
 
 	cleanDir(BIN_DIR);
 
