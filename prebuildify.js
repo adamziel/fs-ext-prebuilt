@@ -152,7 +152,10 @@ function runPrebuild(targetLabel, targetSpec) {
         env: {
             ...process.env,
             // Force C++20 so Node 25/V8 builds succeed on all toolchains.
+            // node-gyp respects npm_config_* variables for compiler flags.
+            // CXXFLAGS alone doesn't work because node-gyp doesn't read it directly.
             CXXFLAGS: `${process.env.CXXFLAGS || ''} -std=c++20`.trim(),
+            npm_config_cxxflags: '-std=c++20',
         },
     });
 
