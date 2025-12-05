@@ -22,12 +22,36 @@ permissions:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        include:
+          # macOS builds universal binaries (x64 + arm64)
+          - os: macos
+            arch: universal
+            runner: macos-14
+          # Linux x64
+          - os: linux
+            arch: x64
+            runner: ubuntu-24.04
+          # Linux arm64
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          # Windows x64
+          - os: windows
+            arch: x64
+            runner: windows-2022
+          # Windows arm64 (runner may not be available in all repos)
+          - os: windows
+            arch: arm64
+            runner: windows-11-arm
+            optional: true
+
+    # Allow Windows ARM64 to fail if runner is unavailable
+    continue-on-error: ${{ matrix.optional == true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +66,7 @@ jobs:
           cache: 'npm'
 
       - name: Install LLVM Clang (macOS)
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos'
         run: |
           brew install llvm
           echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
@@ -51,7 +75,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Build prebuilds (macOS)
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos'
         env:
           NODE_VERSIONS: ${{ inputs.node_versions }}
           ELECTRON_VERSION: ${{ inputs.electron_version }}
@@ -62,7 +86,7 @@ jobs:
         run: node prebuildify.js
 
       - name: Build prebuilds
-        if: runner.os != 'macOS'
+        if: matrix.os != 'macos'
         env:
           NODE_VERSIONS: ${{ inputs.node_versions }}
           ELECTRON_VERSION: ${{ inputs.electron_version }}
@@ -72,11 +96,11 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.os }}
+          name: binaries-${{ matrix.os }}-${{ matrix.arch }}
           path: binaries/*.node
 
       - name: Upload ABI registry (once)
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'linux' && matrix.arch == 'x64'
         uses: actions/upload-artifact@v4
         with:
           name: abi-registry

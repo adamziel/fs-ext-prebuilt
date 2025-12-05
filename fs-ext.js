@@ -27,41 +27,21 @@ var fs = require('fs');
  * Falls back to the locally built binary if no prebuilt is found.
  */
 function loadBinding() {
-	var binariesDir = path.join(__dirname, 'binaries');
-
-	// Check if binaries directory exists
-	if (!fs.existsSync(binariesDir)) {
-		return require('./build/Release/fs_ext.node');
-	}
-
 	var platform = process.platform;
-	var arch = process.arch;
+	var archName = process.arch;
 	var nodeVersion = process.versions.node.split('.')[0] + '.0.0';
+	if (platform === 'darwin') {
+		// macOS uses universal binaries
+		archName = 'x86_64+arm';
+	}
 
 	// Check if running in Electron
 	var isElectron = !!(process.versions && process.versions.electron);
 	var electronVersion = isElectron ? process.versions.electron : null;
 
-	// Platform-specific arch naming used by prebuildify
-	var archName;
-	if (platform === 'darwin') {
-		// macOS uses universal binaries
-		archName = 'x86_64+arm';
-	} else if (arch === 'x64') {
-		archName = 'x64';
-	} else if (arch === 'arm64') {
-		archName = 'arm64';
-	} else {
-		archName = arch;
-	}
-
 	// Try to find matching binaries
-	var files;
-	try {
-		files = fs.readdirSync(binariesDir);
-	} catch (e) {
-		return require('./build/Release/fs_ext.node');
-	}
+	var binariesDir = path.join(__dirname, 'binaries');
+	var files = fs.readdirSync(binariesDir);
 
 	// Build the expected filename pattern
 	// Format: fs-ext-{platform}-{arch}[-libc]-{runtime}-{version}.node
@@ -69,22 +49,12 @@ function loadBinding() {
 
 	// Filter files that match our platform/arch
 	var candidates = files.filter(function (f) {
-		return f.startsWith('fs-ext-') && f.includes(platformArch) && f.endsWith('.node');
+		return (
+			f.startsWith('fs-ext-') &&
+			f.includes(platformArch) &&
+			f.endsWith('.node')
+		);
 	});
-
-	if (candidates.length === 0) {
-		return require('./build/Release/fs_ext.node');
-	}
-
-	// Helper to try loading a binary with fallback on error
-	function tryLoad(binaryPath) {
-		try {
-			return require(binaryPath);
-		} catch (e) {
-			// dlopen failures, architecture mismatches, etc.
-			return null;
-		}
-	}
 
 	// Try Electron first if running in Electron
 	if (isElectron && electronVersion) {
@@ -106,13 +76,21 @@ function loadBinding() {
 		// Try to find any node binary for this platform (use highest version <= current)
 		var nodeVersionNum = parseInt(process.versions.node.split('.')[0], 10);
 		var nodeCandidates = candidates
-			.filter(function (f) { return f.includes('-node-'); })
+			.filter(function (f) {
+				return f.includes('-node-');
+			})
 			.map(function (f) {
 				var match = f.match(/-node-(\d+)\./);
-				return match ? { file: f, version: parseInt(match[1], 10) } : null;
+				return match
+					? { file: f, version: parseInt(match[1], 10) }
+					: null;
 			})
-			.filter(function (c) { return c && c.version <= nodeVersionNum; })
-			.sort(function (a, b) { return b.version - a.version; });
+			.filter(function (c) {
+				return c && c.version <= nodeVersionNum;
+			})
+			.sort(function (a, b) {
+				return b.version - a.version;
+			});
 
 		if (nodeCandidates.length > 0) {
 			nodeBinary = nodeCandidates[0].file;
@@ -120,15 +98,23 @@ function loadBinding() {
 	}
 
 	if (nodeBinary) {
-		var loaded = tryLoad(path.join(binariesDir, nodeBinary));
-		if (loaded) return loaded;
+		return require(path.join(binariesDir, nodeBinary));
 	}
 
 	// Fall back to build
 	return require('./build/Release/fs_ext.node');
 }
 
-var binding = loadBinding();
+// Try loading prebuilt binaries, fallback to the node-gyp built binary
+let binding;
+try {
+	binding = loadBinding();
+	if (!binding) {
+		throw new Error('Failed to load binding');
+	}
+} catch (e) {
+	binding = require('./build/Release/fs_ext.node');
+}
 
 // Used by flock
 function stringToFlockFlags(flag) {

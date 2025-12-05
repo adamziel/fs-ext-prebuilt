@@ -129,14 +129,23 @@ async function resolveElectronVersion() {
 	return electron.replace(/^[^0-9]*/, '');
 }
 
-function runPrebuild(targetLabel, targetSpec) {
-    console.log(`\n=== Building for ${targetLabel} (${targetSpec}) ===`);
+// Determine which architectures to build for based on platform.
+// On macOS we build universal binaries. On Linux/Windows we build for the
+// native architecture only (CI uses separate runners for x64 and arm64).
+function getArchitectures() {
+	if (process.platform === 'darwin') {
+		// macOS supports universal binaries
+		return ['x86_64+arm'];
+	}
+	// Linux and Windows: build for native architecture only.
+	// CI uses separate runners for x64 and arm64.
+	return [process.arch];
+}
 
-    fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
+function runPrebuildForArch(targetLabel, targetSpec, arch) {
+	console.log(`\n=== Building for ${targetLabel} [${arch}] (${targetSpec}) ===`);
 
-	// On macOS, build universal binaries (x86_64+arm). On other platforms, build native arch only.
-	// Windows hangs when trying to cross-compile for ARM without the proper toolchain.
-	const arch = process.platform === 'darwin' ? 'x86_64+arm' : process.arch;
+	fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
 
 	// Use locally installed prebuildify instead of npx to avoid download hangs on Windows
 	const prebuildifyBin = path.join(ROOT, 'node_modules', '.bin', 'prebuildify');
@@ -160,14 +169,14 @@ function runPrebuild(targetLabel, targetSpec) {
 		? `${binDir};${process.env.PATH || ''}`
 		: `${binDir}:${process.env.PATH || ''}`;
 
-    const result = spawnSync(args[0], args.slice(1), {
-        stdio: 'inherit',
-        cwd: ROOT,
-        // 10 minute timeout per build target to prevent hanging builds
-        timeout: 600000,
+	const result = spawnSync(args[0], args.slice(1), {
+		stdio: 'inherit',
+		cwd: ROOT,
+		// 10 minute timeout per build target to prevent hanging builds
+		timeout: 600000,
 		shell: process.platform === 'win32',
 		env: { ...process.env, PATH: pathEnv },
-    });
+	});
 
 	if (result.error) {
 		throw result.error;
@@ -207,6 +216,13 @@ function runPrebuild(targetLabel, targetSpec) {
 	});
 }
 
+function runPrebuild(targetLabel, targetSpec) {
+	const architectures = getArchitectures();
+	for (const arch of architectures) {
+		runPrebuildForArch(targetLabel, targetSpec, arch);
+	}
+}
+
 (async () => {
 	const registry = await ensureAbiRegistry();
 	const nodeVersions = parseNodeVersions(registry);
@@ -222,8 +238,11 @@ function runPrebuild(targetLabel, targetSpec) {
 		`Building prebuilds for Node.js versions: ${nodeVersions.join(', ')}`
 	);
 	console.log(`Electron target: ${electronVersion}`);
-	const targetArch = process.platform === 'darwin' ? 'arm64+x86_64 (universal)' : process.arch;
-	console.log(`Architectures: ${targetArch}`);
+	const architectures = getArchitectures();
+	const archDisplay = process.platform === 'darwin'
+		? 'arm64+x86_64 (universal)'
+		: architectures.join(', ');
+	console.log(`Architectures: ${archDisplay}`);
 
 	cleanDir(BIN_DIR);
 
