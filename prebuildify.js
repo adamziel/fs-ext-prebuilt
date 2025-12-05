@@ -154,12 +154,19 @@ function runPrebuild(targetLabel, targetSpec) {
 
 	console.log(`Running: ${args.join(' ')}`);
 
+	// Add node_modules/.bin to PATH so node-gyp is found
+	const binDir = path.join(ROOT, 'node_modules', '.bin');
+	const pathEnv = process.platform === 'win32'
+		? `${binDir};${process.env.PATH || ''}`
+		: `${binDir}:${process.env.PATH || ''}`;
+
     const result = spawnSync(args[0], args.slice(1), {
         stdio: 'inherit',
         cwd: ROOT,
         // 10 minute timeout per build target to prevent hanging builds
         timeout: 600000,
 		shell: process.platform === 'win32',
+		env: { ...process.env, PATH: pathEnv },
     });
 
 	if (result.error) {
