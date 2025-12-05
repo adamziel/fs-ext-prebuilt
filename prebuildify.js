@@ -130,9 +130,9 @@ async function resolveElectronVersion() {
 }
 
 function runPrebuild(targetLabel, targetSpec) {
-	console.log(`\n=== Building for ${targetLabel} (${targetSpec}) ===`);
+    console.log(`\n=== Building for ${targetLabel} (${targetSpec}) ===`);
 
-	fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
+    fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
 
 	const args = ['npx', '--yes', 'prebuildify', '--arch', 'x86_64+arm'];
 
@@ -146,13 +146,15 @@ function runPrebuild(targetLabel, targetSpec) {
 
 	args.push('--target', targetSpec);
 
-	execSync(args.join(' '), {
-		stdio: 'inherit',
-		cwd: ROOT,
-		env: {
-			...process.env,
-		},
-	});
+    execSync(args.join(' '), {
+        stdio: 'inherit',
+        cwd: ROOT,
+        env: {
+            ...process.env,
+            // Force C++20 so Node 25/V8 builds succeed on all toolchains.
+            CXXFLAGS: `${process.env.CXXFLAGS || ''} -std=c++20`.trim(),
+        },
+    });
 
 	const osDirs = fs
 		.readdirSync(PREBUILD_DIR, { withFileTypes: true })
