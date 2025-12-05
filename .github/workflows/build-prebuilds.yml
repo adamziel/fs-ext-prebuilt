@@ -30,7 +30,7 @@ jobs:
           # macOS x64 (Intel)
           - os: macos
             arch: x64
-            runner: macos-13
+            runner: macos-15-intel
           # Linux x64
           - os: linux
             arch: x64
