@@ -20,15 +20,20 @@
 		"Matt Sergeant <helpme@gmail.com> (http://baudehlo.wordpress.com/)"
 	],
 	"main": "fs-ext.js",
+	"files": [
+		"fs-ext.js",
+		"load-prebuilt.js",
+		"install.js",
+		"binaries/",
+		"binding.gyp",
+		"fs-ext.cc",
+		"LICENSE.txt"
+	],
 	"engines": {
 		"node": ">= 8.0.0"
 	},
 	"dependencies": {
-		"nan": "^2.24.0",
-		"node-abi": "^3.85.0",
-		"node-gyp": "^11.2.0",
-		"node-gyp-build": "^4.8.4",
-		"prebuildify": "^6.0.1"
+		"nan": "^2.24.0"
 	},
 	"license": "MIT",
 	"bugs": {
@@ -38,10 +43,12 @@
 		"prebuilds": "node ./prebuildify.js",
 		"install": "node ./install.js",
 		"test": "node ./run_tests",
-		"lint": "node ./node_modules/eslint/bin/eslint \"*.js\" \"tests/**/*.js\"",
-		"cover": "NODE_ENV=cov ./node_modules/.bin/istanbul cover node ./run_tests"
+		"lint": "node ./node_modules/eslint/bin/eslint \"*.js\" \"tests/**/*.js\""
 	},
 	"devDependencies": {
-		"eslint": "^5.9.0"
+		"eslint": "^5.9.0",
+		"node-abi": "^3.85.0",
+		"node-gyp": "^11.2.0",
+		"prebuildify": "^6.0.1"
 	}
 }
