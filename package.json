@@ -1,5 +1,5 @@
 {
-	"name": "@wp-playground/fs-ext",
+	"name": "fs-ext-extra-prebuilt",
 	"description": "Fork of fs-ext with prebuilt binaries and Windows LockFileEx support.",
 	"keywords": [
 		"fs",

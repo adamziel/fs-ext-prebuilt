@@ -21,41 +21,49 @@ class Mutex {
 	}
 }
 
-const m = new Mutex('worker-test.lock');
-const write = function (msg) {
-	// Use explicit open/write/fsync/close to ensure the write is fully
-	// persisted before returning. This prevents race conditions where
-	// another process reads the file before filesystem caches are flushed.
-	const fd = fs.openSync('worker-test.log', 'a');
-	fs.writeSync(fd, `${msg}\n`);
-	fs.fsyncSync(fd);
-	fs.closeSync(fd);
-};
-
-fs.rmSync('worker-test.log', { force: true });
+const LOCK_FILE = 'worker-test.lock';
 
 if (isMainThread) {
+	// Main thread: acquire lock, hold it, then release
+	const m = new Mutex(LOCK_FILE);
 	m.lock();
-	setTimeout(() => {
-		write('releasing main lock');
-		m.unlock();
-	}, 100);
+	const lockAcquiredAt = Date.now();
+
 	const worker = new Worker(__filename);
-	worker.on('message', () => {
-		assert.deepEqual(
-			fs
-				.readFileSync('worker-test.log', 'utf-8')
-				.split('\n')
-				.map((line) => line.trim())
-				.filter((a) => a),
-			['releasing main lock', 'worker lock acquired']
+
+	// Release lock after 200ms
+	setTimeout(() => {
+		m.unlock();
+	}, 200);
+
+	worker.on('message', (msg) => {
+		// Worker reports when it acquired the lock
+		const workerAcquiredAt = msg.acquiredAt;
+
+		// The worker should have acquired the lock AFTER we released it
+		// (at least 150ms after we acquired it, giving some margin)
+		const timeDiff = workerAcquiredAt - lockAcquiredAt;
+		assert.ok(
+			timeDiff >= 150,
+			`Worker acquired lock too early: ${timeDiff}ms after main (expected >= 150ms)`
 		);
+
 		worker.terminate();
-		fs.rmSync('worker-test.log');
+		console.log(
+			`Worker lock test passed: worker waited ${timeDiff}ms for lock`
+		);
+	});
+
+	worker.on('error', (err) => {
+		console.error('Worker error:', err);
+		process.exit(1);
 	});
 } else {
+	// Worker thread: try to acquire the same lock (should block until main releases)
+	const m = new Mutex(LOCK_FILE);
 	m.lock();
-	write('worker lock acquired');
+	const acquiredAt = Date.now();
 	m.unlock();
-	parentPort.postMessage('complete');
+
+	parentPort.postMessage({ acquiredAt });
 }

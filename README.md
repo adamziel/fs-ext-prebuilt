@@ -1,4 +1,4 @@
-# @wp-playground/fs-ext
+# fs-ext-extra-prebuilt
 
 A fork of [fs-ext](https://github.com/baudehlo/node-fs-ext) that ships prebuilt binaries for all major platforms and adds Windows-specific file locking APIs.
 
@@ -14,13 +14,13 @@ The original `fs-ext` package requires compilation during `npm install`, which c
 ## Installation
 
 ```sh
-npm install @wp-playground/fs-ext
+npm install fs-ext-extra-prebuilt
 ```
 
 ## Usage
 
 ```js
-const { flock, flockSync } = require('@wp-playground/fs-ext');
+const { flock, flockSync } = require('fs-ext-extra-prebuilt');
 const fs = require('fs');
 
 const fd = fs.openSync('foo.txt', 'r');
@@ -105,7 +105,7 @@ Synchronous UnlockFileEx. Throws an exception on error.
 
 ## Constants
 
-Available via `require('@wp-playground/fs-ext').constants`:
+Available via `require('fs-ext-extra-prebuilt').constants`:
 
 - `LOCK_SH`, `LOCK_EX`, `LOCK_NB`, `LOCK_UN` - flock flags
 - `F_GETFD`, `F_SETFD`, `F_GETLK`, `F_SETLK`, `F_SETLKW` - fcntl commands
