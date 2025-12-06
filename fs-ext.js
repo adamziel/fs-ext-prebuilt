@@ -246,4 +246,12 @@ exports.unlockFileExSync = function (
 	);
 };
 
+// Ensure Windows LockFileEx constants are available on all platforms
+if (binding.constants.LOCKFILE_EXCLUSIVE_LOCK === undefined) {
+	binding.constants.LOCKFILE_EXCLUSIVE_LOCK = 0x00000002;
+}
+if (binding.constants.LOCKFILE_FAIL_IMMEDIATELY === undefined) {
+	binding.constants.LOCKFILE_FAIL_IMMEDIATELY = 0x00000001;
+}
+
 exports.constants = binding.constants;
