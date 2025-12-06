@@ -7,106 +7,35 @@
  */
 'use strict';
 
-var path = require('path');
-var fs = require('fs');
 var spawn = require('child_process').spawn;
+var prebuilt = require('./load-prebuilt');
 
 var ROOT = __dirname;
-var BINARIES_DIR = path.join(ROOT, 'binaries');
 
 /**
- * Try to find and load a prebuilt binary for the current platform.
+ * Try to load a prebuilt binary for the current platform.
  * Returns true if successful, false otherwise.
  */
 function tryLoadPrebuilt() {
-	var platform = process.platform;
-	var arch = process.arch;
-	var nodeVersionNum = parseInt(process.versions.node.split('.')[0], 10);
-
-	// Check if running in Electron
-	var isElectron = !!(process.versions && process.versions.electron);
-	var electronVersion = isElectron ? process.versions.electron : null;
-
-	var files;
-	try {
-		files = fs.readdirSync(BINARIES_DIR);
-	} catch (e) {
-		console.log('No binaries directory found');
-		return false;
-	}
-
-	// Filter files that match our platform/arch
-	var platformArch = platform + '-' + arch;
-	var candidates = files.filter(function (f) {
-		return (
-			f.startsWith('fs-ext-') &&
-			f.includes(platformArch) &&
-			f.endsWith('.node')
+	var info = prebuilt.getPrebuiltPath();
+	if (!info) {
+		console.log(
+			'No prebuilt binary found for ' +
+				process.platform +
+				'-' +
+				process.arch
 		);
-	});
-
-	if (candidates.length === 0) {
-		console.log('No prebuilt binaries found for ' + platformArch);
 		return false;
 	}
 
-	// Try Electron binary first
-	if (isElectron && electronVersion) {
-		var electronBinary = candidates.find(function (f) {
-			return f.includes('electron-' + electronVersion);
-		});
-		if (electronBinary) {
-			try {
-				require(path.join(BINARIES_DIR, electronBinary));
-				console.log('Using prebuilt binary: ' + electronBinary);
-				return true;
-			} catch (e) {
-				// Failed to load, continue
-			}
-		}
+	try {
+		require(info.path);
+		console.log('Using prebuilt binary: ' + info.name);
+		return true;
+	} catch (e) {
+		console.log('Failed to load ' + info.name + ': ' + e.message);
+		return false;
 	}
-
-	// Try to find exact Node version match
-	var nodeVersion = nodeVersionNum + '.0.0';
-	var nodeBinary = candidates.find(function (f) {
-		return f.includes('node-' + nodeVersion);
-	});
-
-	if (!nodeBinary) {
-		// Find highest version <= current
-		var nodeCandidates = candidates
-			.filter(function (f) {
-				return f.includes('-node-');
-			})
-			.map(function (f) {
-				var match = f.match(/-node-(\d+)\./);
-				return match
-					? { file: f, version: parseInt(match[1], 10) }
-					: null;
-			})
-			.filter(function (c) {
-				return c && c.version <= nodeVersionNum;
-			})
-			.sort(function (a, b) {
-				return b.version - a.version;
-			});
-
-		if (nodeCandidates.length > 0) {
-			nodeBinary = nodeCandidates[0].file;
-		}
-	}
-
-	if (nodeBinary) {
-		try {
-			require(path.join(BINARIES_DIR, nodeBinary));
-			console.log('Using prebuilt binary: ' + nodeBinary);
-			return true;
-		} catch (e) {
-			console.log('Failed to load ' + nodeBinary + ': ' + e.message);
-		}
-	}
-
-	return false;
 }
 
 /**
