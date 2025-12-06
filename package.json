@@ -36,7 +36,7 @@
 	},
 	"scripts": {
 		"prebuilds": "node ./prebuildify.js",
-		"install": "node-gyp configure build",
+		"install": "node ./install.js",
 		"test": "node ./run_tests",
 		"lint": "node ./node_modules/eslint/bin/eslint \"*.js\" \"tests/**/*.js\"",
 		"cover": "NODE_ENV=cov ./node_modules/.bin/istanbul cover node ./run_tests"

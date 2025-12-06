@@ -25,10 +25,10 @@ const fs = require('fs');
 
 const fd = fs.openSync('foo.txt', 'r');
 flock(fd, 'ex', (err) => {
-    if (err) {
-        return console.error("Couldn't lock file");
-    }
-    // file is locked
+	if (err) {
+		return console.error("Couldn't lock file");
+	}
+	// file is locked
 });
 ```
 
@@ -86,6 +86,7 @@ Synchronous lseek(2). Throws an exception on error. Returns current file positio
 Asynchronous LockFileEx. Locks a byte range in a file.
 
 Flags:
+
 - `0` - shared lock
 - `constants.LOCKFILE_EXCLUSIVE_LOCK` - exclusive lock
 - `constants.LOCKFILE_FAIL_IMMEDIATELY` - non-blocking (can be OR'd with above)
