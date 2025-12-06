@@ -33,6 +33,9 @@ jobs:
                   registry-url: 'https://registry.npmjs.org'
                   cache: 'npm'
 
+            - name: Upgrade npm for trusted publishing
+              run: npm install -g npm@latest
+
             - name: Configure git
               run: |
                   git config user.name "github-actions[bot]"
