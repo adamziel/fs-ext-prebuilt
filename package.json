@@ -1,19 +1,24 @@
 {
-	"author": "Matt Sergeant <helpme@gmail.com> (http://baudehlo.wordpress.com/)",
-	"name": "fs-ext",
-	"description": "Extensions to core 'fs' module.",
+	"name": "@wp-playground/fs-ext",
+	"description": "Fork of fs-ext with prebuilt binaries and Windows LockFileEx support.",
 	"keywords": [
 		"fs",
 		"filesystem",
 		"flock",
-		"seek"
+		"seek",
+		"lockfileex",
+		"prebuilt"
 	],
-	"version": "2.1.1",
-	"homepage": "https://github.com/baudehlo/node-fs-ext/",
+	"version": "2.2.0",
+	"homepage": "https://github.com/adamziel/fs-ext-prebuilt",
 	"repository": {
 		"type": "git",
-		"url": "git://github.com/baudehlo/node-fs-ext.git"
+		"url": "git://github.com/adamziel/fs-ext-prebuilt.git"
 	},
+	"author": "WordPress Playground team",
+	"contributors": [
+		"Matt Sergeant <helpme@gmail.com> (http://baudehlo.wordpress.com/)"
+	],
 	"main": "fs-ext.js",
 	"engines": {
 		"node": ">= 8.0.0"
@@ -25,14 +30,9 @@
 		"node-gyp-build": "^4.8.4",
 		"prebuildify": "^6.0.1"
 	},
-	"licenses": [
-		{
-			"type": "MIT"
-		}
-	],
+	"license": "MIT",
 	"bugs": {
-		"mail": "helpme@gmail.com",
-		"web": "https://github.com/baudehlo/node-fs-ext/issues"
+		"url": "https://github.com/adamziel/fs-ext-prebuilt/issues"
 	},
 	"scripts": {
 		"prebuilds": "node ./prebuildify.js",
