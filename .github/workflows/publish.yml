@@ -1,60 +1,61 @@
 name: Publish to npm
 
 on:
-  workflow_dispatch:
-    inputs:
-      version_bump:
-        description: 'Version bump type'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+    workflow_dispatch:
+        inputs:
+            version_bump:
+                description: 'Version bump type'
+                required: true
+                type: choice
+                options:
+                    - patch
+                    - minor
+                    - major
 
 permissions:
-  contents: write
+    id-token: write # required for OIDC
+    contents: write
 
 jobs:
-  publish:
-    name: Bump version and publish
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: trunk
-          fetch-depth: 0
+    publish:
+        name: Bump version and publish
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: trunk
+                  fetch-depth: 0
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+            - name: Use Node.js 22
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+                  registry-url: 'https://registry.npmjs.org'
+                  cache: 'npm'
 
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+            - name: Configure git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version
-        run: |
-          npm version ${{ inputs.version_bump }} --no-git-tag-version
-          NEW_VERSION=$(node -p "require('./package.json').version")
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+            - name: Bump version
+              run: |
+                  npm version ${{ inputs.version_bump }} --no-git-tag-version
+                  NEW_VERSION=$(node -p "require('./package.json').version")
+                  echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
-      - name: Commit and tag
-        run: |
-          git add package.json package-lock.json
-          git commit -m "v${{ env.NEW_VERSION }}"
-          git tag "v${{ env.NEW_VERSION }}"
-          git push origin trunk
-          git push origin "v${{ env.NEW_VERSION }}"
+            - name: Commit and tag
+              run: |
+                  git add package.json package-lock.json
+                  git commit -m "v${{ env.NEW_VERSION }}"
+                  git tag "v${{ env.NEW_VERSION }}"
+                  git push origin trunk
+                  git push origin "v${{ env.NEW_VERSION }}"
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+            - name: Install dependencies
+              run: npm ci --ignore-scripts
 
-      - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+            - name: Publish to npm
+              run: npm publish --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
