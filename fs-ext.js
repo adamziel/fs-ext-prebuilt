@@ -115,19 +115,59 @@ exports.flockSync = function (fd, flags) {
 	return binding.flock(fd, oper);
 };
 
-exports.fcntl = function (fd, cmd, arg, callback) {
+// fcntl(fd, cmd, arg, [start, len], [callback])
+//
+// For F_SETLK and F_SETLKW, start and len specify the byte range to lock.
+// If start and len are omitted, they default to 0, which locks the entire file.
+exports.fcntl = function (fd, cmd, arg, start, len, callback) {
 	cmd = stringToFcntlFlags(cmd);
-	if (arguments.length < 4) {
+
+	// Handle different argument patterns:
+	// fcntl(fd, cmd, callback) - arg defaults to 0
+	// fcntl(fd, cmd, arg, callback) - no range
+	// fcntl(fd, cmd, arg, start, len) - sync with range
+	// fcntl(fd, cmd, arg, start, len, callback) - async with range
+
+	if (typeof arg === 'function') {
 		callback = arg;
 		arg = 0;
+		start = undefined;
+		len = undefined;
+	} else if (typeof start === 'function') {
+		callback = start;
+		start = undefined;
+		len = undefined;
+	} else if (typeof len === 'function') {
+		callback = len;
+		len = undefined;
 	}
-	if (!arg) arg = 0;
-	return binding.fcntl(fd, cmd, arg, callback);
+
+	if (arg === undefined || arg === null) arg = 0;
+
+	// If start and len are provided, pass them to the binding
+	if (start !== undefined && len !== undefined) {
+		if (typeof callback === 'function') {
+			return binding.fcntl(fd, cmd, arg, start, len, callback);
+		}
+		return binding.fcntl(fd, cmd, arg, start, len);
+	}
+
+	if (typeof callback === 'function') {
+		return binding.fcntl(fd, cmd, arg, callback);
+	}
+	return binding.fcntl(fd, cmd, arg);
 };
 
-exports.fcntlSync = function (fd, cmd, arg) {
+// fcntlSync(fd, cmd, arg, [start, len])
+exports.fcntlSync = function (fd, cmd, arg, start, len) {
 	cmd = stringToFcntlFlags(cmd);
-	if (!arg) arg = 0;
+	if (arg === undefined || arg === null) arg = 0;
+
+	// If start and len are provided, pass them to the binding
+	if (start !== undefined && len !== undefined) {
+		return binding.fcntl(fd, cmd, arg, start, len);
+	}
+
 	return binding.fcntl(fd, cmd, arg);
 };
 
