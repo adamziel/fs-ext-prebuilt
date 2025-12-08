@@ -48,5 +48,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native module from source
+        if: runner.os != 'Windows'
+        run: |
+          npx node-gyp rebuild
+          # Move prebuilt binaries so tests use freshly compiled module
+          mv binaries binaries.bak
+
       - name: Run tests
         run: npm test
