@@ -49,13 +49,11 @@ jobs:
         run: npm ci
 
       - name: Rebuild native module from source
-        # fcntl() is a Unix/POSIX API that doesn't exist on Windows.
-        # Windows uses LockFileEx/UnlockFileEx instead, which are unchanged.
-        if: runner.os != 'Windows'
-        run: |
-          npx node-gyp rebuild
-          # Move prebuilt binaries so tests use freshly compiled module
-          mv binaries binaries.bak
+        run: npx node-gyp rebuild
+
+      - name: Move prebuilt binaries aside
+        # So tests use freshly compiled module instead of prebuilts
+        run: node -e "require('fs').renameSync('binaries', 'binaries.bak')"
 
       - name: Run tests
         run: npm test
