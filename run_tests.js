@@ -2,6 +2,7 @@
 
 if (process.platform !== 'win32') {
 	require('./tests/test-fs-fcntl');
+	require('./tests/test-fs-fcntl-multiprocess');
 }
 
 require('./tests/test-fs-seek');
