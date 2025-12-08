@@ -49,6 +49,8 @@ jobs:
         run: npm ci
 
       - name: Rebuild native module from source
+        # fcntl() is a Unix/POSIX API that doesn't exist on Windows.
+        # Windows uses LockFileEx/UnlockFileEx instead, which are unchanged.
         if: runner.os != 'Windows'
         run: |
           npx node-gyp rebuild
