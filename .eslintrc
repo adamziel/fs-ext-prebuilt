@@ -3,9 +3,19 @@
        "node": true,
        "es6": true
     },
+    "parser": "@typescript-eslint/parser",
+    "plugins": ["@typescript-eslint"],
+    "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended"
+    ],
+    "parserOptions": {
+        "ecmaVersion": 2020,
+        "sourceType": "module"
+    },
     "rules": {
         "dot-notation": 2,
-        "indent": [2, 2, {"SwitchCase": 1}],
+        "indent": "off",
         "no-trailing-spaces": [2, { "skipBlankLines": true }],
         "keyword-spacing": [2, {
             "overrides": { },
@@ -15,8 +25,9 @@
         "no-delete-var": 2,
         "no-label-var": 2,
         "no-shadow-restricted-names": 2,
-        "no-unused-vars": [ 1, { "args": "none" }],
-        "no-undef": 2,
+        "no-unused-vars": "off",
+        "@typescript-eslint/no-unused-vars": ["warn", { "args": "none", "caughtErrors": "none" }],
+        "no-undef": "off",
         "no-undef-init": 2,
         "no-dupe-args": 2,
         "no-dupe-keys": 2,
@@ -31,23 +42,26 @@
         "block-scoped-var": 2,
         "no-floating-decimal": 2,
         "no-lone-blocks": 2,
-        "no-redeclare": [2, {"builtinGlobals": true}],
+        "no-redeclare": "off",
         "no-return-assign": 2,
         "no-sequences": 2,
         "no-unused-labels": 2,
         "no-useless-concat": 2,
         "no-warning-comments": 1,
         "radix": 2,
-        "strict": [2, "global"],
-        "brace-style": [2, "stroustrup", { "allowSingleLine": true }],
+        "strict": "off",
+        "brace-style": "off",
         "comma-spacing": ["error", { "before": false, "after": true }],
         "comma-style": ["error", "last"],
         "eol-last": 2,
         "max-statements-per-line": [2, {"max": 2}],
-        "new-cap": 2,
+        "new-cap": "off",
         "new-parens": 2,
         "no-lonely-if": 2,
         "no-mixed-spaces-and-tabs": 2,
-        "no-whitespace-before-property": 2
+        "no-whitespace-before-property": 2,
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-explicit-any": "off",
+        "prefer-rest-params": "off"
     }
 }

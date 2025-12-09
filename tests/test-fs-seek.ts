@@ -3,7 +3,6 @@
 // fsExt.seek(fd, offset, whence, [callback])
 // fsExt.seekSync(fd, offset, whence)
 
-import * as assert from 'assert';
 import * as path from 'path';
 import * as util from 'util';
 import * as fs from 'fs';

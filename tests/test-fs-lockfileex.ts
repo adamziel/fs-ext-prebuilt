@@ -46,6 +46,7 @@ function remove_file_wo_error(filePath: string): void {
 	}
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function expect_errno(api_name: string, resource: unknown, error: Error | null | undefined, expected_errno: string): void {
 	let fault_msg: string | undefined;
 
