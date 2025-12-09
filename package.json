@@ -46,10 +46,10 @@
 		"prepublishOnly": "npm run build",
 		"prebuilds": "node ./prebuildify.js",
 		"install": "node ./install.js",
-		"test": "npm run build && npm run build:workers && npx ts-node --project tsconfig.test.json ./run_tests.ts && npm run test:jest",
+		"test": "npm run build && npm run build:workers && npx tsx ./run_tests.ts && npm run test:jest",
 		"test:jest": "jest tests/fcntl-range-locks.test.ts",
 		"lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" \"*.js\"",
-		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.workers.json"
 	},
 	"devDependencies": {
 		"@types/jest": "^30.0.0",
@@ -62,7 +62,7 @@
 		"node-gyp": "^11.2.0",
 		"prebuildify": "^6.0.1",
 		"ts-jest": "^29.4.6",
-		"ts-node": "^10.9.2",
+		"tsx": "^4.21.0",
 		"typescript": "^5.9.3"
 	}
 }

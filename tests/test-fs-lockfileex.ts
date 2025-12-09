@@ -20,7 +20,7 @@ const debug_me = false;
 const tmp_dir = os.tmpdir();
 const file_path = path.join(tmp_dir, 'what.when.lockfileex.test');
 
-let file_fd: number;
+let file_fd: number = -1;
 let err: Error | null | undefined;
 
 // Report on test results

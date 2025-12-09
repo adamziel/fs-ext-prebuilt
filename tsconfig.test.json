@@ -5,5 +5,5 @@
 		"outDir": "./dist-tests",
 		"noEmit": true
 	},
-	"include": ["src/**/*", "tests/**/*"]
+	"include": ["src/**/*", "tests/**/*", "run_tests.ts"]
 }
