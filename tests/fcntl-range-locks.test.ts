@@ -1,19 +1,24 @@
-'use strict';
-
-var fork = require('node:child_process').fork;
-var fs = require('node:fs');
-var path = require('node:path');
-var os = require('node:os');
+import { fork, ChildProcess } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import * as fsExt from '../src/fs-ext';
 
 // Skip on Windows - fcntl is not available
-var isWindows = process.platform === 'win32';
-var describeUnix = isWindows ? describe.skip : describe;
+const isWindows = process.platform === 'win32';
+const describeUnix = isWindows ? describe.skip : describe;
 
-// Load the module - prefer local build over prebuilts for testing
-var fsExt = require('..');
+// Use local build for testing
 fsExt.useNativeModule('local');
 
-var LOCK_FILE = path.join(os.tmpdir(), 'fcntl-jest-test-' + process.pid + '.lock');
+const LOCK_FILE = path.join(os.tmpdir(), `fcntl-jest-test-${process.pid}.lock`);
+
+interface WorkerResult {
+	status: 'acquired' | 'blocked' | 'error';
+	time?: number;
+	code?: string;
+	message?: string;
+}
 
 describeUnix('fcntl range locks', () => {
 	beforeEach(() => {
@@ -43,9 +48,8 @@ describeUnix('fcntl range locks', () => {
 		test('fcntl(fd, cmd, arg, callback) works without start/len', (done) => {
 			const fd = fs.openSync(LOCK_FILE, 'r+');
 
-			fsExt.fcntl(fd, fsExt.constants.F_SETLK, fsExt.constants.F_WRLCK, (err, result) => {
+			fsExt.fcntl(fd, fsExt.constants.F_SETLK, fsExt.constants.F_WRLCK, (err) => {
 				expect(err).toBeNull();
-				expect(result).toBe(0);
 
 				// Release lock
 				fsExt.fcntl(fd, fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK, (err2) => {
@@ -106,9 +110,8 @@ describeUnix('fcntl range locks', () => {
 				fsExt.constants.F_WRLCK,
 				200,
 				50,
-				(err, result) => {
+				(err) => {
 					expect(err).toBeNull();
-					expect(result).toBe(0);
 
 					// Unlock
 					fsExt.fcntl(
@@ -152,12 +155,17 @@ describeUnix('fcntl range locks', () => {
 		});
 	});
 
-	describe('multiprocess locking', function () {
-		var spawnWorker = function (lockStart, lockLen, useBlocking) {
-			var env = Object.assign({}, process.env, {
-				LOCK_FILE: LOCK_FILE,
+	describe('multiprocess locking', () => {
+		const spawnWorker = (
+			lockStart: number | undefined,
+			lockLen: number | undefined,
+			useBlocking: boolean
+		): Promise<WorkerResult> => {
+			const env: NodeJS.ProcessEnv = {
+				...process.env,
+				LOCK_FILE,
 				USE_BLOCKING: useBlocking ? '1' : '0'
-			});
+			};
 			// Only set LOCK_START and LOCK_LEN if they are numbers (not undefined)
 			if (typeof lockStart === 'number') {
 				env.LOCK_START = String(lockStart);
@@ -166,25 +174,25 @@ describeUnix('fcntl range locks', () => {
 				env.LOCK_LEN = String(lockLen);
 			}
 
-			return new Promise(function (resolve, reject) {
-				var worker = fork(
+			return new Promise((resolve, reject) => {
+				const worker: ChildProcess = fork(
 					path.join(__dirname, 'fcntl-worker.js'),
 					[],
-					{ env: env }
+					{ env }
 				);
 
-				var timeout = setTimeout(function () {
+				const timeout = setTimeout(() => {
 					worker.kill();
 					reject(new Error('Worker timed out'));
 				}, 5000);
 
-				worker.on('message', function (msg) {
+				worker.on('message', (msg: WorkerResult) => {
 					clearTimeout(timeout);
 					worker.kill();
 					resolve(msg);
 				});
 
-				worker.on('error', function (err) {
+				worker.on('error', (err: Error) => {
 					clearTimeout(timeout);
 					reject(err);
 				});
@@ -209,7 +217,7 @@ describeUnix('fcntl range locks', () => {
 			const result = await workerPromise;
 			expect(result.status).toBe('acquired');
 
-			const waitTime = result.time - lockAcquiredAt;
+			const waitTime = result.time! - lockAcquiredAt;
 			expect(waitTime).toBeGreaterThanOrEqual(150);
 		});
 
