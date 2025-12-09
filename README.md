@@ -48,7 +48,7 @@ and a server which supports locking.
 
 Synchronous flock(2). Throws an exception on error.
 
-### fcntl(fd, cmd, [arg], [callback])
+### fcntl(fd, cmd, [arg], [start], [len], [callback])
 
 Asynchronous fcntl(2).
 
@@ -62,7 +62,11 @@ The supported commands are:
 - 'getlk' ( F_GETLK )
 - 'setlkw' ( F_SETLKW )
 
-### fcntlSync(fd, flags)
+For F_SETLK and F_SETLKW, the `arg` parameter specifies the lock type (F_RDLCK, F_WRLCK, or F_UNLCK).
+The optional `start` and `len` parameters specify the byte range to lock. If omitted, they default
+to 0, which locks the entire file.
+
+### fcntlSync(fd, cmd, [arg], [start], [len])
 
 Synchronous fcntl(2). Throws an exception on error.
 
