@@ -1,28 +1,23 @@
 'use strict';
 
-const { fork } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
-const os = require('node:os');
+var fork = require('node:child_process').fork;
+var fs = require('node:fs');
+var path = require('node:path');
+var os = require('node:os');
 
 // Skip on Windows - fcntl is not available
-const isWindows = process.platform === 'win32';
-const describeUnix = isWindows ? describe.skip : describe;
+var isWindows = process.platform === 'win32';
+var describeUnix = isWindows ? describe.skip : describe;
 
 // Load the module - prefer local build over prebuilts for testing
-let fsExt;
+var fsExt = require('../fs-ext');
 try {
-	const binding = require('../build/Release/fs_ext.node');
-	fsExt = {
-		constants: binding.constants,
-		fcntl: require('../fs-ext').fcntl,
-		fcntlSync: require('../fs-ext').fcntlSync,
-	};
+	fsExt.useNativeModule('local');
 } catch (e) {
-	fsExt = require('../fs-ext');
+	// Local build not available, use prebuilt (or whatever was already loaded)
 }
 
-const LOCK_FILE = path.join(os.tmpdir(), `fcntl-jest-test-${process.pid}.lock`);
+var LOCK_FILE = path.join(os.tmpdir(), 'fcntl-jest-test-' + process.pid + '.lock');
 
 describeUnix('fcntl range locks', () => {
 	beforeEach(() => {
@@ -161,13 +156,12 @@ describeUnix('fcntl range locks', () => {
 		});
 	});
 
-	describe('multiprocess locking', () => {
-		const spawnWorker = (lockStart, lockLen, useBlocking) => {
-			const env = {
-				...process.env,
-				LOCK_FILE,
-				USE_BLOCKING: useBlocking ? '1' : '0',
-			};
+	describe('multiprocess locking', function () {
+		var spawnWorker = function (lockStart, lockLen, useBlocking) {
+			var env = Object.assign({}, process.env, {
+				LOCK_FILE: LOCK_FILE,
+				USE_BLOCKING: useBlocking ? '1' : '0'
+			});
 			// Only set LOCK_START and LOCK_LEN if they are numbers (not undefined)
 			if (typeof lockStart === 'number') {
 				env.LOCK_START = String(lockStart);
@@ -176,25 +170,25 @@ describeUnix('fcntl range locks', () => {
 				env.LOCK_LEN = String(lockLen);
 			}
 
-			return new Promise((resolve, reject) => {
-				const worker = fork(
+			return new Promise(function (resolve, reject) {
+				var worker = fork(
 					path.join(__dirname, 'fcntl-worker.js'),
 					[],
-					{ env }
+					{ env: env }
 				);
 
-				const timeout = setTimeout(() => {
+				var timeout = setTimeout(function () {
 					worker.kill();
 					reject(new Error('Worker timed out'));
 				}, 5000);
 
-				worker.on('message', (msg) => {
+				worker.on('message', function (msg) {
 					clearTimeout(timeout);
 					worker.kill();
 					resolve(msg);
 				});
 
-				worker.on('error', (err) => {
+				worker.on('error', function (err) {
 					clearTimeout(timeout);
 					reject(err);
 				});

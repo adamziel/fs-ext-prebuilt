@@ -19,27 +19,21 @@
 
 'use strict';
 
-var prebuilt = require('./load-prebuilt');
+var loader = require('./load-prebuilt');
 
-// Try loading prebuilt binaries, fallback to the node-gyp built binary
-var binding = prebuilt.loadPrebuilt();
+// Load native module (prebuilt first, then local build)
+var binding = loader.loadNativeModule();
 if (!binding) {
-	try {
-		binding = require('./build/Release/fs_ext.node');
-	} catch (e) {
-		throw new Error(
-			'Failed to load fs-ext native module. ' +
-				'No prebuilt binary found for ' +
-				process.platform +
-				'-' +
-				process.arch +
-				' (Node ' +
-				process.version +
-				'), and no local build available. ' +
-				'Error: ' +
-				e.message
-		);
-	}
+	throw new Error(
+		'Failed to load fs-ext native module. ' +
+			'No prebuilt binary found for ' +
+			process.platform +
+			'-' +
+			process.arch +
+			' (Node ' +
+			process.version +
+			'), and no local build available.'
+	);
 }
 
 // Used by flock
@@ -295,3 +289,37 @@ if (binding.constants.LOCKFILE_FAIL_IMMEDIATELY === undefined) {
 }
 
 exports.constants = binding.constants;
+
+/**
+ * Switch to a different native module source.
+ * Useful for testing to explicitly use the local build instead of prebuilts.
+ *
+ * @param {string} source - 'prebuilt' or 'local'
+ * @throws {Error} if the requested source cannot be loaded
+ */
+exports.useNativeModule = function (source) {
+	var newBinding = loader.useNativeModule(source);
+	if (!newBinding) {
+		throw new Error(
+			'Failed to load fs-ext native module from source: ' + source
+		);
+	}
+	binding = newBinding;
+	exports.constants = binding.constants;
+
+	// Re-add Windows constants if needed
+	if (binding.constants.LOCKFILE_EXCLUSIVE_LOCK === undefined) {
+		binding.constants.LOCKFILE_EXCLUSIVE_LOCK = 0x00000002;
+	}
+	if (binding.constants.LOCKFILE_FAIL_IMMEDIATELY === undefined) {
+		binding.constants.LOCKFILE_FAIL_IMMEDIATELY = 0x00000001;
+	}
+};
+
+/**
+ * Get the current native module source.
+ * @returns {string|null} 'prebuilt', 'local', or null if not loaded
+ */
+exports.getNativeModuleSource = function () {
+	return loader.getNativeModuleSource();
+};

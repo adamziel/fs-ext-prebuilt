@@ -13,6 +13,13 @@ var assert = require('assert'),
 	fsExt = require('../fs-ext'),
 	os = require('os');
 
+// Use local build if available
+try {
+	fsExt.useNativeModule('local');
+} catch (e) {
+	// Local build not available, use prebuilt
+}
+
 var tests_ok = 0,
 	tests_run = 0;
 
