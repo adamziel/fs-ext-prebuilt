@@ -10,7 +10,7 @@ var isWindows = process.platform === 'win32';
 var describeUnix = isWindows ? describe.skip : describe;
 
 // Load the module - prefer local build over prebuilts for testing
-var fsExt = require('../fs-ext');
+var fsExt = require('..');
 fsExt.useNativeModule('local');
 
 var LOCK_FILE = path.join(os.tmpdir(), 'fcntl-jest-test-' + process.pid + '.lock');

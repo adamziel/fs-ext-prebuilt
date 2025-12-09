@@ -10,7 +10,7 @@ var assert = require('assert'),
 	path = require('path'),
 	util = require('util'),
 	fs = require('fs'),
-	fsExt = require('../fs-ext'),
+	fsExt = require('..'),
 	os = require('os');
 
 // Use local build if available

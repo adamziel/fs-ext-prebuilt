@@ -3,7 +3,7 @@
 const { Worker, isMainThread, parentPort } = require('node:worker_threads');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const fsExt = require('../fs-ext');
+const fsExt = require('..');
 
 class Mutex {
 	constructor(filename) {

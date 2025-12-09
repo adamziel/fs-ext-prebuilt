@@ -21,7 +21,7 @@
 var assert = require('assert'),
 	path = require('path'),
 	util = require('util'),
-	fs = require('../fs-ext'),
+	fs = require('..'),
 	os = require('os');
 
 var tests_ok = 0,

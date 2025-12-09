@@ -4,7 +4,7 @@
 // Communicates with parent via IPC
 
 var fs = require('node:fs');
-var fsExt = require('../fs-ext');
+var fsExt = require('..');
 
 // Use local build if available (same as test file)
 try {
