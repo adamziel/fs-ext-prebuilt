@@ -1,6 +1,10 @@
 name: Build fs-ext prebuilds
 
 on:
+  push:
+    branches: [trunk]
+    paths:
+      - 'fs-ext.cc'
   workflow_dispatch:
     inputs:
       node_versions:
