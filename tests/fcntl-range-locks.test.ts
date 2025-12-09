@@ -9,7 +9,11 @@ const isWindows = process.platform === 'win32';
 const describeUnix = isWindows ? describe.skip : describe;
 
 // Use local build for testing
-fsExt.useNativeModule('local');
+try {
+	fsExt.useNativeModule('local');
+} catch (e) {
+	// Local build not available, use prebuilt
+}
 
 const LOCK_FILE = path.join(os.tmpdir(), `fcntl-jest-test-${process.pid}.lock`);
 
