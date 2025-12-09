@@ -11,11 +11,7 @@ var describeUnix = isWindows ? describe.skip : describe;
 
 // Load the module - prefer local build over prebuilts for testing
 var fsExt = require('../fs-ext');
-try {
-	fsExt.useNativeModule('local');
-} catch (e) {
-	// Local build not available, use prebuilt (or whatever was already loaded)
-}
+fsExt.useNativeModule('local');
 
 var LOCK_FILE = path.join(os.tmpdir(), 'fcntl-jest-test-' + process.pid + '.lock');
 

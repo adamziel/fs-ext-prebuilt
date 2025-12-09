@@ -497,7 +497,7 @@
     "userconfig": "/Users/cloudnik/.npmrc",
     "access": "public",
     "globalconfig": "/opt/homebrew/etc/npmrc",
-    "local_prefix": "/Users/cloudnik/www/Automattic/core/plugins/wordpress-playground/fs-ext-prebuilt/src/package",
+    "local_prefix": "/Users/cloudnik/www/Automattic/playground-projects/fs-ext-prebuilt",
     "global_prefix": "/opt/homebrew"
   }
 }
