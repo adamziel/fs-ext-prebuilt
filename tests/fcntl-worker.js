@@ -7,26 +7,35 @@ const fs = require('node:fs');
 const fsExt = require('../fs-ext');
 
 const LOCK_FILE = process.env.LOCK_FILE;
-const start = parseInt(process.env.LOCK_START, 10);
-const len = parseInt(process.env.LOCK_LEN, 10);
+const start = process.env.LOCK_START ? parseInt(process.env.LOCK_START, 10) : undefined;
+const len = process.env.LOCK_LEN ? parseInt(process.env.LOCK_LEN, 10) : undefined;
 const useBlocking = process.env.USE_BLOCKING === '1';
+const useWholeFile = start === undefined || len === undefined;
 
 const fd = fs.openSync(LOCK_FILE, 'r+');
+
+// Helper to call fcntlSync with or without range
+function lockFile(cmd, type) {
+	if (useWholeFile) {
+		return fsExt.fcntlSync(fd, cmd, type);
+	}
+	return fsExt.fcntlSync(fd, cmd, type, start, len);
+}
 
 try {
 	if (useBlocking) {
 		// F_SETLKW - blocking lock, will wait until lock is available
-		fsExt.fcntlSync(fd, fsExt.constants.F_SETLKW, fsExt.constants.F_WRLCK, start, len);
+		lockFile(fsExt.constants.F_SETLKW, fsExt.constants.F_WRLCK);
 		process.send({ status: 'acquired', time: Date.now() });
 
 		// Release lock
-		fsExt.fcntlSync(fd, fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK, start, len);
+		lockFile(fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK);
 	} else {
 		// F_SETLK - non-blocking, will fail immediately if lock is held
 		try {
-			fsExt.fcntlSync(fd, fsExt.constants.F_SETLK, fsExt.constants.F_WRLCK, start, len);
+			lockFile(fsExt.constants.F_SETLK, fsExt.constants.F_WRLCK);
 			process.send({ status: 'acquired', time: Date.now() });
-			fsExt.fcntlSync(fd, fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK, start, len);
+			lockFile(fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK);
 		} catch (e) {
 			// EAGAIN or EACCES means lock is held by another process
 			if (e.code === 'EAGAIN' || e.code === 'EACCES') {

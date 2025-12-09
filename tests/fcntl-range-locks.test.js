@@ -163,19 +163,24 @@ describeUnix('fcntl range locks', () => {
 
 	describe('multiprocess locking', () => {
 		const spawnWorker = (lockStart, lockLen, useBlocking) => {
+			const env = {
+				...process.env,
+				LOCK_FILE,
+				USE_BLOCKING: useBlocking ? '1' : '0',
+			};
+			// Only set LOCK_START and LOCK_LEN if they are numbers (not undefined)
+			if (typeof lockStart === 'number') {
+				env.LOCK_START = String(lockStart);
+			}
+			if (typeof lockLen === 'number') {
+				env.LOCK_LEN = String(lockLen);
+			}
+
 			return new Promise((resolve, reject) => {
 				const worker = fork(
 					path.join(__dirname, 'fcntl-worker.js'),
 					[],
-					{
-						env: {
-							...process.env,
-							LOCK_FILE,
-							LOCK_START: String(lockStart),
-							LOCK_LEN: String(lockLen),
-							USE_BLOCKING: useBlocking ? '1' : '0',
-						},
-					}
+					{ env }
 				);
 
 				const timeout = setTimeout(() => {
@@ -246,6 +251,23 @@ describeUnix('fcntl range locks', () => {
 				expect(result.status).toBe('acquired');
 			} finally {
 				fsExt.fcntlSync(fd, fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK, 300, 100);
+				fs.closeSync(fd);
+			}
+		});
+
+		test('whole-file lock blocks child process from acquiring lock', async () => {
+			const fd = fs.openSync(LOCK_FILE, 'r+');
+
+			// Acquire whole-file lock using old signature (no start/len)
+			fsExt.fcntlSync(fd, fsExt.constants.F_SETLK, fsExt.constants.F_WRLCK);
+
+			try {
+				// Worker tries to acquire whole-file lock (non-blocking) - should fail
+				const result = await spawnWorker(undefined, undefined, false);
+				expect(result.status).toBe('blocked');
+				expect(['EAGAIN', 'EACCES']).toContain(result.code);
+			} finally {
+				fsExt.fcntlSync(fd, fsExt.constants.F_SETLK, fsExt.constants.F_UNLCK);
 				fs.closeSync(fd);
 			}
 		});
