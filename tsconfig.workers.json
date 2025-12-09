@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "commonjs",
+		"rootDir": "tests",
+		"outDir": "./dist-workers",
+		"declaration": false,
+		"declarationMap": false,
+		"sourceMap": true,
+		"strict": false,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true
+	},
+	"include": ["tests/fcntl-worker.ts", "tests/flock-worker.ts"]
+}

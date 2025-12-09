@@ -1,5 +1,3 @@
-'use strict';
-
 // Test the Windows-specific LockFileEx/UnlockFileEx APIs
 //
 // fsExt.lockFileEx(fd, flags, offsetLow, offsetHigh, lengthLow, lengthHigh, [callback])
@@ -7,29 +5,26 @@
 // fsExt.unlockFileEx(fd, offsetLow, offsetHigh, lengthLow, lengthHigh, [callback])
 // fsExt.unlockFileExSync(fd, offsetLow, offsetHigh, lengthLow, lengthHigh)
 
-var assert = require('assert'),
-	path = require('path'),
-	util = require('util'),
-	fs = require('fs'),
-	fsExt = require('../fs-ext'),
-	os = require('os');
+import * as assert from 'assert';
+import * as path from 'path';
+import * as util from 'util';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as fsExt from '../src/fs-ext';
 
-var tests_ok = 0,
-	tests_run = 0;
+let tests_ok = 0;
+let tests_run = 0;
 
-var debug_me = false;
+const debug_me = false;
 
-var tmp_dir = os.tmpdir(),
-	file_path = path.join(tmp_dir, 'what.when.lockfileex.test');
+const tmp_dir = os.tmpdir();
+const file_path = path.join(tmp_dir, 'what.when.lockfileex.test');
 
-var file_fd, err;
-
-// LockFileEx flags (from Windows API)
-var LOCKFILE_EXCLUSIVE_LOCK = 0x00000002;
-var LOCKFILE_FAIL_IMMEDIATELY = 0x00000001;
+let file_fd: number = -1;
+let err: Error | null | undefined;
 
 // Report on test results
-process.addListener('exit', function () {
+process.addListener('exit', () => {
 	try {
 		fs.closeSync(file_fd);
 	} catch (e) {
@@ -43,31 +38,24 @@ process.addListener('exit', function () {
 });
 
 // Test helpers
-function remove_file_wo_error(file_path) {
+function remove_file_wo_error(filePath: string): void {
 	try {
-		fs.unlinkSync(file_path);
+		fs.unlinkSync(filePath);
 	} catch (e) {
 		// might not exist, that's okay.
 	}
 }
 
-function expect_errno(api_name, resource, err, expected_errno) {
-	var fault_msg;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function expect_errno(api_name: string, resource: unknown, error: Error | null | undefined, expected_errno: string): void {
+	let fault_msg: string | undefined;
 
-	if (debug_me) console.log('  expected_errno(err): ' + err);
+	if (debug_me) console.log('  expected_errno(err): ' + error);
 
-	if (err && err.code !== expected_errno) {
-		fault_msg =
-			api_name +
-			'(): expected error ' +
-			expected_errno +
-			', got another error';
-	} else if (!err) {
-		fault_msg =
-			api_name +
-			'(): expected error ' +
-			expected_errno +
-			', got another error';
+	if (error && (error as NodeJS.ErrnoException).code !== expected_errno) {
+		fault_msg = api_name + '(): expected error ' + expected_errno + ', got another error';
+	} else if (!error) {
+		fault_msg = api_name + '(): expected error ' + expected_errno + ', got another error';
 	}
 
 	if (!fault_msg) {
@@ -79,11 +67,11 @@ function expect_errno(api_name, resource, err, expected_errno) {
 	}
 }
 
-function expect_ok(api_name, resource, err) {
-	var fault_msg;
+function expect_ok(api_name: string, resource: unknown, error: Error | null | undefined): void {
+	let fault_msg: string | undefined;
 
-	if (err) {
-		fault_msg = api_name + '(): returned error: ' + err.message;
+	if (error) {
+		fault_msg = api_name + '(): returned error: ' + error.message;
 	}
 
 	if (!fault_msg) {
@@ -157,10 +145,7 @@ if (
 ) {
 	tests_ok++;
 	if (debug_me)
-		console.log(
-			'  LOCKFILE_EXCLUSIVE_LOCK = ' +
-				fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK
-		);
+		console.log('  LOCKFILE_EXCLUSIVE_LOCK = ' + fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK);
 } else {
 	console.log('FAILURE: LOCKFILE_EXCLUSIVE_LOCK is not defined correctly');
 }
@@ -172,10 +157,7 @@ if (
 ) {
 	tests_ok++;
 	if (debug_me)
-		console.log(
-			'  LOCKFILE_FAIL_IMMEDIATELY = ' +
-				fsExt.constants.LOCKFILE_FAIL_IMMEDIATELY
-		);
+		console.log('  LOCKFILE_FAIL_IMMEDIATELY = ' + fsExt.constants.LOCKFILE_FAIL_IMMEDIATELY);
 } else {
 	console.log('FAILURE: LOCKFILE_FAIL_IMMEDIATELY is not defined correctly');
 }
@@ -185,85 +167,71 @@ if (
 // Test shared lock on entire file (offset 0, length 0xFFFFFFFF = entire file)
 tests_run++;
 try {
-	err = fsExt.lockFileExSync(file_fd, 0, 0, 0, 0xffffffff, 0);
+	fsExt.lockFileExSync(file_fd, 0, 0, 0, 0xffffffff, 0);
 	err = null;
 } catch (e) {
-	err = e;
+	err = e as Error;
 }
 expect_ok('lockFileExSync (shared)', file_fd, err);
 
 // Unlock
 tests_run++;
 try {
-	err = fsExt.unlockFileExSync(file_fd, 0, 0, 0xffffffff, 0);
+	fsExt.unlockFileExSync(file_fd, 0, 0, 0xffffffff, 0);
 	err = null;
 } catch (e) {
-	err = e;
+	err = e as Error;
 }
 expect_ok('unlockFileExSync', file_fd, err);
 
 // Test exclusive lock
 tests_run++;
 try {
-	err = fsExt.lockFileExSync(
-		file_fd,
-		fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK,
-		0,
-		0,
-		0xffffffff,
-		0
-	);
+	fsExt.lockFileExSync(file_fd, fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 0xffffffff, 0);
 	err = null;
 } catch (e) {
-	err = e;
+	err = e as Error;
 }
 expect_ok('lockFileExSync (exclusive)', file_fd, err);
 
 // Unlock
 tests_run++;
 try {
-	err = fsExt.unlockFileExSync(file_fd, 0, 0, 0xffffffff, 0);
+	fsExt.unlockFileExSync(file_fd, 0, 0, 0xffffffff, 0);
 	err = null;
 } catch (e) {
-	err = e;
+	err = e as Error;
 }
 expect_ok('unlockFileExSync', file_fd, err);
 
 // Test byte-range lock (lock only first 100 bytes)
 tests_run++;
 try {
-	err = fsExt.lockFileExSync(
-		file_fd,
-		fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK,
-		0,
-		0,
-		100,
-		0
-	);
+	fsExt.lockFileExSync(file_fd, fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 100, 0);
 	err = null;
 } catch (e) {
-	err = e;
+	err = e as Error;
 }
 expect_ok('lockFileExSync (byte-range)', file_fd, err);
 
 // Unlock byte range
 tests_run++;
 try {
-	err = fsExt.unlockFileExSync(file_fd, 0, 0, 100, 0);
+	fsExt.unlockFileExSync(file_fd, 0, 0, 100, 0);
 	err = null;
 } catch (e) {
-	err = e;
+	err = e as Error;
 }
 expect_ok('unlockFileExSync (byte-range)', file_fd, err);
 
 // Test async lockFileEx / unlockFileEx
 tests_run++;
 tests_run++;
-fsExt.lockFileEx(file_fd, 0, 0, 0, 0xffffffff, 0, function (err) {
-	expect_ok('lockFileEx (async shared)', file_fd, err);
+fsExt.lockFileEx(file_fd, 0, 0, 0, 0xffffffff, 0, (asyncErr) => {
+	expect_ok('lockFileEx (async shared)', file_fd, asyncErr);
 
-	fsExt.unlockFileEx(file_fd, 0, 0, 0xffffffff, 0, function (err) {
-		expect_ok('unlockFileEx (async)', file_fd, err);
+	fsExt.unlockFileEx(file_fd, 0, 0, 0xffffffff, 0, (asyncErr2) => {
+		expect_ok('unlockFileEx (async)', file_fd, asyncErr2);
 
 		// Test async exclusive lock
 		tests_run++;
@@ -275,11 +243,11 @@ fsExt.lockFileEx(file_fd, 0, 0, 0, 0xffffffff, 0, function (err) {
 			0,
 			0xffffffff,
 			0,
-			function (err) {
-				expect_ok('lockFileEx (async exclusive)', file_fd, err);
+			(asyncErr3) => {
+				expect_ok('lockFileEx (async exclusive)', file_fd, asyncErr3);
 
-				fsExt.unlockFileEx(file_fd, 0, 0, 0xffffffff, 0, function (err) {
-					expect_ok('unlockFileEx (async after exclusive)', file_fd, err);
+				fsExt.unlockFileEx(file_fd, 0, 0, 0xffffffff, 0, (asyncErr4) => {
+					expect_ok('unlockFileEx (async after exclusive)', file_fd, asyncErr4);
 
 					// Test non-blocking lock attempt (LOCKFILE_FAIL_IMMEDIATELY)
 					// First acquire an exclusive lock, then try to acquire another
@@ -293,29 +261,28 @@ fsExt.lockFileEx(file_fd, 0, 0, 0, 0xffffffff, 0, function (err) {
 						0,
 						0xffffffff,
 						0,
-						function (err) {
-							expect_ok('lockFileEx (setup for conflict test)', file_fd, err);
+						(asyncErr5) => {
+							expect_ok('lockFileEx (setup for conflict test)', file_fd, asyncErr5);
 
 							// Try to acquire another lock with FAIL_IMMEDIATELY - should fail
 							// Note: On Windows, same process can usually upgrade locks,
 							// so this test verifies the API works rather than lock conflict
 							fsExt.lockFileEx(
 								file_fd,
-								fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK |
-									fsExt.constants.LOCKFILE_FAIL_IMMEDIATELY,
+								fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK | fsExt.constants.LOCKFILE_FAIL_IMMEDIATELY,
 								0,
 								0,
 								0xffffffff,
 								0,
-								function (err) {
+								(asyncErr6) => {
 									// This might succeed or fail depending on Windows lock behavior
 									// for same-process lock upgrades. Either way, the API should work.
 									tests_ok++;
 									if (debug_me) {
-										if (err) {
+										if (asyncErr6) {
 											console.log(
 												'  lockFileEx with FAIL_IMMEDIATELY returned error (expected): ' +
-													err.message
+													asyncErr6.message
 											);
 										} else {
 											console.log(
@@ -325,16 +292,9 @@ fsExt.lockFileEx(file_fd, 0, 0, 0, 0xffffffff, 0, function (err) {
 									}
 
 									// Clean up - unlock
-									fsExt.unlockFileEx(
-										file_fd,
-										0,
-										0,
-										0xffffffff,
-										0,
-										function (err) {
-											expect_ok('unlockFileEx (final cleanup)', file_fd, err);
-										}
-									);
+									fsExt.unlockFileEx(file_fd, 0, 0, 0xffffffff, 0, (asyncErr7) => {
+										expect_ok('unlockFileEx (final cleanup)', file_fd, asyncErr7);
+									});
 								}
 							);
 						}
