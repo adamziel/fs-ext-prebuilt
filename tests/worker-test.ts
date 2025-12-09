@@ -21,7 +21,7 @@ if (isMainThread) {
 
 	// Use a separate JavaScript worker file because Node's native TypeScript
 	// support runs workers as ESM which has issues with require paths
-	const workerPath = path.join(__dirname, 'flock-worker.js');
+	const workerPath = path.join(__dirname, '..', 'dist-workers', 'flock-worker.js');
 	const worker = new Worker(workerPath);
 
 	// Release lock after 200ms

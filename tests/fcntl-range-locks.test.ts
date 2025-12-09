@@ -176,7 +176,7 @@ describeUnix('fcntl range locks', () => {
 
 			return new Promise((resolve, reject) => {
 				const worker: ChildProcess = fork(
-					path.join(__dirname, 'fcntl-worker.js'),
+					path.join(__dirname, '..', 'dist-workers', 'fcntl-worker.js'),
 					[],
 					{ env }
 				);

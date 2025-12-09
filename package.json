@@ -42,10 +42,11 @@
 	},
 	"scripts": {
 		"build": "tsc",
+		"build:workers": "tsc -p tsconfig.workers.json",
 		"prepublishOnly": "npm run build",
 		"prebuilds": "node ./prebuildify.js",
 		"install": "node ./install.js",
-		"test": "npm run build && npx ts-node --project tsconfig.test.json ./run_tests.ts && npm run test:jest",
+		"test": "npm run build && npm run build:workers && npx ts-node --project tsconfig.test.json ./run_tests.ts && npm run test:jest",
 		"test:jest": "jest tests/fcntl-range-locks.test.ts",
 		"lint": "node ./node_modules/eslint/bin/eslint \"*.js\" \"tests/**/*.js\""
 	},

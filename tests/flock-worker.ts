@@ -1,9 +1,8 @@
 // Worker thread for flock blocking test
-// This file must be JavaScript because Node's native TypeScript support
-// runs workers as ESM which has issues with require paths
 
-const { parentPort } = require('node:worker_threads');
-const fs = require('node:fs');
+import { parentPort } from 'node:worker_threads';
+import * as fs from 'node:fs';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const fsExt = require('..');
 
 // Use local build if available
@@ -23,4 +22,4 @@ fsExt.flockSync(fd, 'un');
 fs.closeSync(fd);
 fs.rmSync(LOCK_FILE, { force: true });
 
-parentPort.postMessage({ acquiredAt });
+parentPort!.postMessage({ acquiredAt });

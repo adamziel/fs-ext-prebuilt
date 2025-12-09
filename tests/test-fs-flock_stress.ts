@@ -1,4 +1,3 @@
-'use strict';
 // Stress test these APIs as published in extension module 'fs-ext'
 // Specifically, try to exercise any memory leaks by simple repetition.
 //
@@ -14,31 +13,35 @@
 
 // Ideas for testing borrowed from bnoordhuis (Ben Noordhuis)
 
-//TODO and Questions
+import * as assert from 'assert';
+import * as path from 'path';
+import * as util from 'util';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as fsExt from '../src/fs-ext';
 
-//  console.log( require.resolve('../fs-ext'));
+// Use local build if available
+try {
+	fsExt.useNativeModule('local');
+} catch (e) {
+	// Local build not available, use prebuilt
+}
 
-var assert = require('assert'),
-	path = require('path'),
-	util = require('util'),
-	fs = require('..'),
-	os = require('os');
+let tests_ok = 0;
+let tests_run = 0;
 
-var tests_ok = 0,
-	tests_run = 0;
+const debug_me = false;
 
-var debug_me = false;
+const tmp_dir = os.tmpdir();
+const file_path = path.join(tmp_dir, 'what.when.flock.test');
 
-var tmp_dir = os.tmpdir(),
-	file_path = path.join(tmp_dir, 'what.when.flock.test'),
-	file_path_not = path.join(tmp_dir, 'what.not.flock.test');
+let file_fd: number = -1;
+let err: Error | null | undefined;
 
-var file_fd, err;
-
-// Report on test results -  -  -  -  -  -  -  -  -  -  -  -
+// Report on test results
 
 // Clean up and report on final success or failure of tests here
-process.addListener('exit', function () {
+process.addListener('exit', () => {
 	console.log('');
 	console.log('  After all testing:');
 	display_memory_usage_now();
@@ -56,42 +59,41 @@ process.addListener('exit', function () {
 	assert.equal(tests_ok, tests_run, 'One or more subtests failed');
 });
 
-// Test helpers -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Test helpers
 
-function remove_file_wo_error(file_path) {
+function remove_file_wo_error(filePath: string): void {
 	try {
-		fs.unlinkSync(file_path);
+		fs.unlinkSync(filePath);
 	} catch (e) {
 		// might not exist, that's okay.
 	}
 }
 
-function display_memory_usage_now() {
-	var usage = process.memoryUsage();
+function display_memory_usage_now(): void {
+	const usage = process.memoryUsage();
 	console.log(
 		'    memory:  heapUsed  %d      rss       %d',
 		usage.heapUsed,
 		usage.rss
 	);
 	console.log(
-		'             heapTotal %d      vsize     %d',
-		usage.heapTotal,
-		usage.vsize
+		'             heapTotal %d',
+		usage.heapTotal
 	);
 }
 
-function expect_errno(api_name, resource, err, expected_errno) {
-	var fault_msg;
+function expect_errno(api_name: string, resource: unknown, error: Error | null | undefined, expected_errno: string): void {
+	let fault_msg: string | undefined;
 
-	if (debug_me) console.log('  expected_errno(err): ' + err);
+	if (debug_me) console.log('  expected_errno(err): ' + error);
 
-	if (err && err.code !== expected_errno) {
+	if (error && (error as NodeJS.ErrnoException).code !== expected_errno) {
 		fault_msg =
 			api_name +
 			'(): expected error ' +
 			expected_errno +
 			', got another error';
-	} else if (!err) {
+	} else if (!error) {
 		fault_msg =
 			api_name +
 			'(): expected error ' +
@@ -108,10 +110,10 @@ function expect_errno(api_name, resource, err, expected_errno) {
 	}
 }
 
-function expect_ok(api_name, resource, err) {
-	var fault_msg;
+function expect_ok(api_name: string, resource: unknown, error: Error | null | undefined): void {
+	let fault_msg: string | undefined;
 
-	if (err) {
+	if (error) {
 		fault_msg = api_name + '(): returned error';
 	}
 
@@ -121,11 +123,11 @@ function expect_ok(api_name, resource, err) {
 	} else {
 		console.log('FAILURE: ' + fault_msg);
 		console.log('   ARGS: ', util.inspect(arguments));
-		console.log('    err: %j', err);
+		console.log('    err: %j', error);
 	}
 }
 
-// Setup for testing    -  -  -  -  -  -  -  -  -  -  -  -
+// Setup for testing
 
 // We assume that test-fs-flock.js has run successfully before this
 // test and so we omit several duplicate tests.
@@ -147,9 +149,10 @@ if (tests_run !== tests_ok) {
 	process.exit(1);
 }
 
-// Stress testing    -  -  -  -  -  -  -  -  -  -  -  -  -
+// Stress testing
 
-var how_many_times, how_many_secs, how_many_done;
+let how_many_times: number;
+let how_many_done: number;
 
 console.log('  Start time is %s', new Date());
 console.log('  Before any testing:');
@@ -157,73 +160,64 @@ display_memory_usage_now();
 console.log('');
 
 // Repeat a successful flockSync() call
-if (1) {
-	how_many_times = 10000000;
-	//how_many_times = 1000000;
-	//how_many_times = 4;
+how_many_times = 10000000;
 
-	for (var i = 0; i < how_many_times; i++) {
-		tests_run++;
-		err = fs.flockSync(file_fd, 'un');
-		expect_ok('flockSync', file_fd, err);
+for (let i = 0; i < how_many_times; i++) {
+	tests_run++;
+	err = undefined;
+	try {
+		fsExt.flockSync(file_fd, 'un');
+	} catch (e) {
+		err = e as Error;
 	}
-
-	console.log('  After %d calls to successful flockSync():', how_many_times);
-	display_memory_usage_now();
-	console.log('        Time is %s', new Date());
+	expect_ok('flockSync', file_fd, err);
 }
 
+console.log('  After %d calls to successful flockSync():', how_many_times);
+display_memory_usage_now();
+console.log('        Time is %s', new Date());
+
 // Repeat a successful flock() call
-if (1) {
+how_many_times = 1000000;
+how_many_done = 0;
+
+function test_failing_flock(): void {
 	how_many_times = 1000000;
-	//how_many_times = 100000;
-	//how_many_times = 4;
 	how_many_done = 0;
 
 	tests_run++;
-	fs.flock(file_fd, 'un', function func_good_flock_cb(err) {
-		expect_ok('flock', file_fd, err);
+	fsExt.flock(-99, 'un', function func_bad_flock_cb(flockErr) {
+		expect_errno('flock', -99, flockErr, 'EBADF');
 		if (debug_me)
 			console.log('    flock call counter   %d', how_many_times);
 
 		how_many_done += 1;
 		if (how_many_done < how_many_times) {
 			tests_run++;
-			fs.flock(file_fd, 'un', func_good_flock_cb);
+			fsExt.flock(-99, 'un', func_bad_flock_cb);
 			return;
 		}
-		console.log('  After %d calls to successful flock():', how_many_times);
+		console.log('  After %d calls to failing flock():', how_many_times);
 		display_memory_usage_now();
 		console.log('        Time is %s', new Date());
-
-		test_failing_flock();
 	});
-} else {
-	test_failing_flock();
 }
 
-function test_failing_flock() {
-	if (1) {
-		how_many_times = 1000000;
-		//how_many_times = 100000;
-		//how_many_times = 4;
-		how_many_done = 0;
+tests_run++;
+fsExt.flock(file_fd, 'un', function func_good_flock_cb(flockErr) {
+	expect_ok('flock', file_fd, flockErr);
+	if (debug_me)
+		console.log('    flock call counter   %d', how_many_times);
 
+	how_many_done += 1;
+	if (how_many_done < how_many_times) {
 		tests_run++;
-		fs.flock(-99, 'un', function func_good_flock_cb(err) {
-			expect_errno('flock', -99, err, 'EBADF');
-			if (debug_me)
-				console.log('    flock call counter   %d', how_many_times);
-
-			how_many_done += 1;
-			if (how_many_done < how_many_times) {
-				tests_run++;
-				fs.flock(-99, 'un', func_good_flock_cb);
-				return;
-			}
-			console.log('  After %d calls to failing flock():', how_many_times);
-			display_memory_usage_now();
-			console.log('        Time is %s', new Date());
-		});
+		fsExt.flock(file_fd, 'un', func_good_flock_cb);
+		return;
 	}
-}
+	console.log('  After %d calls to successful flock():', how_many_times);
+	display_memory_usage_now();
+	console.log('        Time is %s', new Date());
+
+	test_failing_flock();
+});
