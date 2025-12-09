@@ -42,11 +42,13 @@
 	"scripts": {
 		"prebuilds": "node ./prebuildify.js",
 		"install": "node ./install.js",
-		"test": "node ./run_tests",
+		"test": "node ./run_tests && npm run test:jest",
+		"test:jest": "jest tests/fcntl-range-locks.test.js",
 		"lint": "node ./node_modules/eslint/bin/eslint \"*.js\" \"tests/**/*.js\""
 	},
 	"devDependencies": {
 		"eslint": "^5.9.0",
+		"jest": "^29.7.0",
 		"node-abi": "^3.85.0",
 		"node-gyp": "^11.2.0",
 		"prebuildify": "^6.0.1"

@@ -13,6 +13,13 @@ var assert = require('assert'),
 	fsExt = require('../fs-ext'),
 	os = require('os');
 
+// Use local build if available
+try {
+	fsExt.useNativeModule('local');
+} catch (e) {
+	// Local build not available, use prebuilt
+}
+
 var tests_ok = 0,
 	tests_run = 0;
 
@@ -350,6 +357,9 @@ fsExt.fcntl(file_fd, 'getfd', function (err, flags) {
 									'  unexpected success  from fcntl() with bad argument'
 								);
 							}
+
+							// Test range locks with start and len parameters
+							testRangeLocks();
 						});
 					}
 				);
@@ -357,3 +367,194 @@ fsExt.fcntl(file_fd, 'getfd', function (err, flags) {
 		}
 	);
 });
+
+// Test F_SETLK and F_SETLKW with start and len parameters for range locking
+function testRangeLocks() {
+	if (debug_me) console.log('\nTesting range locks with start and len...');
+
+	// Test that F_RDLCK, F_WRLCK, and F_UNLCK constants are available
+	var lock_constant_names = ['F_RDLCK', 'F_WRLCK', 'F_UNLCK', 'F_SETLK', 'F_SETLKW'];
+	lock_constant_names.forEach(function (name) {
+		tests_run++;
+		if (
+			fsExt.constants[name] !== undefined &&
+			typeof fsExt.constants[name] === 'number'
+		) {
+			tests_ok++;
+			if (debug_me) console.log('  %s = %d', name, fsExt.constants[name]);
+		} else {
+			console.log('FAILURE: %s is not defined correctly', name);
+		}
+	});
+
+	// Test synchronous range lock: lock bytes 10-20
+	tests_run++;
+	try {
+		err = null;
+		fsExt.fcntlSync(
+			file_fd,
+			fsExt.constants.F_SETLK,
+			fsExt.constants.F_WRLCK,
+			10,
+			10
+		);
+		if (debug_me) console.log('  Sync range lock (10-20) acquired');
+		tests_ok++;
+	} catch (e) {
+		err = e;
+		console.log('FAILURE: fcntlSync with range lock failed: %s', e.message);
+	}
+
+	// Test synchronous range unlock
+	tests_run++;
+	try {
+		err = null;
+		fsExt.fcntlSync(
+			file_fd,
+			fsExt.constants.F_SETLK,
+			fsExt.constants.F_UNLCK,
+			10,
+			10
+		);
+		if (debug_me) console.log('  Sync range unlock (10-20) succeeded');
+		tests_ok++;
+	} catch (e) {
+		err = e;
+		console.log('FAILURE: fcntlSync unlock with range failed: %s', e.message);
+	}
+
+	// Test asynchronous range lock
+	tests_run++;
+	fsExt.fcntl(
+		file_fd,
+		fsExt.constants.F_SETLK,
+		fsExt.constants.F_WRLCK,
+		100,
+		50,
+		function (err) {
+			if (err) {
+				console.log('FAILURE: async fcntl with range lock failed: %s', err.message);
+			} else {
+				tests_ok++;
+				if (debug_me) console.log('  Async range lock (100-150) acquired');
+			}
+
+			// Unlock the range
+			tests_run++;
+			fsExt.fcntl(
+				file_fd,
+				fsExt.constants.F_SETLK,
+				fsExt.constants.F_UNLCK,
+				100,
+				50,
+				function (err) {
+					if (err) {
+						console.log('FAILURE: async fcntl unlock with range failed: %s', err.message);
+					} else {
+						tests_ok++;
+						if (debug_me) console.log('  Async range unlock (100-150) succeeded');
+					}
+
+					// Test F_SETLKW (blocking lock) with range - sync
+					// Note: Using F_WRLCK since file is opened with 'w' mode (write-only).
+					// F_RDLCK would fail with EBADF on a write-only file descriptor.
+					tests_run++;
+					try {
+						err = null;
+						fsExt.fcntlSync(
+							file_fd,
+							fsExt.constants.F_SETLKW,
+							fsExt.constants.F_WRLCK,
+							200,
+							100
+						);
+						if (debug_me) console.log('  Sync blocking range lock (200-300) acquired');
+						tests_ok++;
+
+						// Unlock it
+						fsExt.fcntlSync(
+							file_fd,
+							fsExt.constants.F_SETLK,
+							fsExt.constants.F_UNLCK,
+							200,
+							100
+						);
+						if (debug_me) console.log('  Sync range unlock (200-300) succeeded');
+					} catch (e) {
+						err = e;
+						console.log('FAILURE: fcntlSync F_SETLKW with range failed: %s', e.message);
+					}
+
+					// Test whole-file lock (backward compatibility - no start/len)
+					tests_run++;
+					try {
+						err = null;
+						fsExt.fcntlSync(
+							file_fd,
+							fsExt.constants.F_SETLK,
+							fsExt.constants.F_WRLCK
+						);
+						if (debug_me) console.log('  Sync whole-file lock acquired (backward compat)');
+						tests_ok++;
+
+						fsExt.fcntlSync(
+							file_fd,
+							fsExt.constants.F_SETLK,
+							fsExt.constants.F_UNLCK
+						);
+						if (debug_me) console.log('  Sync whole-file unlock succeeded');
+					} catch (e) {
+						err = e;
+						console.log('FAILURE: fcntlSync whole-file lock (backward compat) failed: %s', e.message);
+					}
+
+					// Test async whole-file lock with old signature: fcntl(fd, cmd, arg, callback)
+					tests_run++;
+					fsExt.fcntl(
+						file_fd,
+						fsExt.constants.F_SETLK,
+						fsExt.constants.F_WRLCK,
+						function (err) {
+							if (err) {
+								console.log('FAILURE: async whole-file lock (old signature) failed: %s', err.message);
+							} else {
+								tests_ok++;
+								if (debug_me) console.log('  Async whole-file lock acquired (old signature)');
+							}
+
+							// Unlock with old signature
+							tests_run++;
+							fsExt.fcntl(
+								file_fd,
+								fsExt.constants.F_SETLK,
+								fsExt.constants.F_UNLCK,
+								function (err) {
+									if (err) {
+										console.log('FAILURE: async whole-file unlock (old signature) failed: %s', err.message);
+									} else {
+										tests_ok++;
+										if (debug_me) console.log('  Async whole-file unlock succeeded (old signature)');
+									}
+
+									// Test with string command names (backward compat)
+									tests_run++;
+									try {
+										fsExt.fcntlSync(file_fd, 'setlk', fsExt.constants.F_WRLCK);
+										if (debug_me) console.log('  Sync lock with string cmd "setlk" succeeded');
+										tests_ok++;
+
+										fsExt.fcntlSync(file_fd, 'setlk', fsExt.constants.F_UNLCK);
+									} catch (e) {
+										console.log('FAILURE: fcntlSync with string cmd failed: %s', e.message);
+									}
+
+									if (debug_me) console.log('Range lock tests completed.');
+								}
+							);
+						}
+					);
+				}
+			);
+		}
+	);
+}

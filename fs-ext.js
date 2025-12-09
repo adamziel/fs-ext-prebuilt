@@ -19,27 +19,21 @@
 
 'use strict';
 
-var prebuilt = require('./load-prebuilt');
+var loader = require('./load-prebuilt');
 
-// Try loading prebuilt binaries, fallback to the node-gyp built binary
-var binding = prebuilt.loadPrebuilt();
+// Load native module (prebuilt first, then local build)
+var binding = loader.loadNativeModule();
 if (!binding) {
-	try {
-		binding = require('./build/Release/fs_ext.node');
-	} catch (e) {
-		throw new Error(
-			'Failed to load fs-ext native module. ' +
-				'No prebuilt binary found for ' +
-				process.platform +
-				'-' +
-				process.arch +
-				' (Node ' +
-				process.version +
-				'), and no local build available. ' +
-				'Error: ' +
-				e.message
-		);
-	}
+	throw new Error(
+		'Failed to load fs-ext native module. ' +
+			'No prebuilt binary found for ' +
+			process.platform +
+			'-' +
+			process.arch +
+			' (Node ' +
+			process.version +
+			'), and no local build available.'
+	);
 }
 
 // Used by flock
@@ -115,19 +109,59 @@ exports.flockSync = function (fd, flags) {
 	return binding.flock(fd, oper);
 };
 
-exports.fcntl = function (fd, cmd, arg, callback) {
+// fcntl(fd, cmd, arg, [start, len], [callback])
+//
+// For F_SETLK and F_SETLKW, start and len specify the byte range to lock.
+// If start and len are omitted, they default to 0, which locks the entire file.
+exports.fcntl = function (fd, cmd, arg, start, len, callback) {
 	cmd = stringToFcntlFlags(cmd);
-	if (arguments.length < 4) {
+
+	// Handle different argument patterns:
+	// fcntl(fd, cmd, callback) - arg defaults to 0
+	// fcntl(fd, cmd, arg, callback) - no range
+	// fcntl(fd, cmd, arg, start, len) - sync with range
+	// fcntl(fd, cmd, arg, start, len, callback) - async with range
+
+	if (typeof arg === 'function') {
 		callback = arg;
 		arg = 0;
+		start = undefined;
+		len = undefined;
+	} else if (typeof start === 'function') {
+		callback = start;
+		start = undefined;
+		len = undefined;
+	} else if (typeof len === 'function') {
+		callback = len;
+		len = undefined;
 	}
-	if (!arg) arg = 0;
-	return binding.fcntl(fd, cmd, arg, callback);
+
+	if (arg === undefined || arg === null) arg = 0;
+
+	// If start and len are provided, pass them to the binding
+	if (start !== undefined && len !== undefined) {
+		if (typeof callback === 'function') {
+			return binding.fcntl(fd, cmd, arg, start, len, callback);
+		}
+		return binding.fcntl(fd, cmd, arg, start, len);
+	}
+
+	if (typeof callback === 'function') {
+		return binding.fcntl(fd, cmd, arg, callback);
+	}
+	return binding.fcntl(fd, cmd, arg);
 };
 
-exports.fcntlSync = function (fd, cmd, arg) {
+// fcntlSync(fd, cmd, arg, [start, len])
+exports.fcntlSync = function (fd, cmd, arg, start, len) {
 	cmd = stringToFcntlFlags(cmd);
-	if (!arg) arg = 0;
+	if (arg === undefined || arg === null) arg = 0;
+
+	// If start and len are provided, pass them to the binding
+	if (start !== undefined && len !== undefined) {
+		return binding.fcntl(fd, cmd, arg, start, len);
+	}
+
 	return binding.fcntl(fd, cmd, arg);
 };
 
@@ -255,3 +289,37 @@ if (binding.constants.LOCKFILE_FAIL_IMMEDIATELY === undefined) {
 }
 
 exports.constants = binding.constants;
+
+/**
+ * Switch to a different native module source.
+ * Useful for testing to explicitly use the local build instead of prebuilts.
+ *
+ * @param {string} source - 'prebuilt' or 'local'
+ * @throws {Error} if the requested source cannot be loaded
+ */
+exports.useNativeModule = function (source) {
+	var newBinding = loader.useNativeModule(source);
+	if (!newBinding) {
+		throw new Error(
+			'Failed to load fs-ext native module from source: ' + source
+		);
+	}
+	binding = newBinding;
+	exports.constants = binding.constants;
+
+	// Re-add Windows constants if needed
+	if (binding.constants.LOCKFILE_EXCLUSIVE_LOCK === undefined) {
+		binding.constants.LOCKFILE_EXCLUSIVE_LOCK = 0x00000002;
+	}
+	if (binding.constants.LOCKFILE_FAIL_IMMEDIATELY === undefined) {
+		binding.constants.LOCKFILE_FAIL_IMMEDIATELY = 0x00000001;
+	}
+};
+
+/**
+ * Get the current native module source.
+ * @returns {string|null} 'prebuilt', 'local', or null if not loaded
+ */
+exports.getNativeModuleSource = function () {
+	return loader.getNativeModuleSource();
+};

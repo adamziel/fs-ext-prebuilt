@@ -48,5 +48,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native module from source
+        run: npx node-gyp rebuild
+
+      - name: Move prebuilt binaries aside
+        # So tests use freshly compiled module instead of prebuilts
+        run: node -e "require('fs').renameSync('binaries', 'binaries.bak')"
+
       - name: Run tests
         run: npm test

@@ -53,6 +53,8 @@ struct store_data_t {
   int oper;
   int arg;
   off_t offset;
+  off_t l_start;  // flock l_start for F_SETLK/F_SETLKW
+  off_t l_len;    // flock l_len for F_SETLK/F_SETLKW
 #ifndef _WIN32
   struct statvfs statvfs_buf;
 #endif
@@ -270,6 +272,8 @@ static void EIO_Fcntl(uv_work_t *req) {
 	if (data->oper == F_SETLK || data->oper == F_SETLKW) {
 		lk.l_whence = SEEK_SET;
 		lk.l_type   = data->arg;
+		lk.l_start  = data->l_start;
+		lk.l_len    = data->l_len;
 	}
 	data->result = result = fcntl(data->fd, data->oper, &lk);
   } else {
@@ -613,7 +617,10 @@ static NAN_METHOD(Seek) {
   info.GetReturnValue().SetUndefined();
 }
 
-//  fs.fcntl(fd, cmd, [arg])
+//  fs.fcntl(fd, cmd, arg, [start], [len], [callback])
+//
+//  For F_SETLK and F_SETLKW, start and len specify the byte range to lock.
+//  If start and len are omitted, they default to 0, which locks the entire file.
 
 #ifndef _WIN32
 static NAN_METHOD(Fcntl) {
@@ -628,20 +635,61 @@ static NAN_METHOD(Fcntl) {
   int cmd = info[1].As<v8::Int32>()->Value();
   int arg = info[2].As<v8::Int32>()->Value();
 
-  if ( ! info[3]->IsFunction()) {
-    int result = fcntl(fd, cmd, arg);
+  // Parse optional start, len, and callback
+  // Possible signatures:
+  //   fcntl(fd, cmd, arg)                      - sync, no range
+  //   fcntl(fd, cmd, arg, callback)            - async, no range
+  //   fcntl(fd, cmd, arg, start, len)          - sync, with range
+  //   fcntl(fd, cmd, arg, start, len, callback) - async, with range
+
+  off_t l_start = 0;
+  off_t l_len = 0;
+  int cb_index = -1;
+
+  if (info.Length() >= 4) {
+    if (info[3]->IsFunction()) {
+      // fcntl(fd, cmd, arg, callback)
+      cb_index = 3;
+    } else if (info.Length() >= 5 && info[3]->IsNumber() && info[4]->IsNumber()) {
+      // fcntl(fd, cmd, arg, start, len [, callback])
+      l_start = static_cast<off_t>(info[3].As<v8::Number>()->Value());
+      l_len = static_cast<off_t>(info[4].As<v8::Number>()->Value());
+      if (info.Length() >= 6 && info[5]->IsFunction()) {
+        cb_index = 5;
+      }
+    }
+  }
+
+  if (cb_index == -1) {
+    // Synchronous call
+    int result;
+    if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {
+      struct flock lk;
+      memset(&lk, 0, sizeof(lk));
+      lk.l_start = l_start;
+      lk.l_len = l_len;
+      lk.l_type = arg;
+      lk.l_whence = SEEK_SET;
+      lk.l_pid = 0;
+      result = fcntl(fd, cmd, &lk);
+    } else {
+      result = fcntl(fd, cmd, arg);
+    }
     if (result == -1) return Nan::ThrowError(Nan::ErrnoException(errno, "Fcntl", ""));
     info.GetReturnValue().Set(Nan::New<Number>(result));
     return;
   }
 
+  // Asynchronous call
   store_data_t* data = new store_data_t();
 
-  data->cb = new Nan::Callback((Local<Function>) info[3].As<Function>());
+  data->cb = new Nan::Callback((Local<Function>) info[cb_index].As<Function>());
   data->fs_op = FS_OP_FCNTL;
   data->fd = fd;
   data->oper = cmd;
   data->arg = arg;
+  data->l_start = l_start;
+  data->l_len = l_len;
 
   uv_work_t *req = new uv_work_t;
   req->data = data;
