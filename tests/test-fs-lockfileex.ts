@@ -174,6 +174,24 @@ try {
 }
 expect_ok('lockFileExSync (shared)', file_fd, err);
 
+// Test that on Windows a shared lock blocks an exclusive lock.
+// This also tests expected failure behavior.
+tests_run++;
+try {
+	fsExt.lockFileExSync(
+		file_fd,
+		fsExt.constants.LOCKFILE_EXCLUSIVE_LOCK | fsExt.constants.LOCKFILE_FAIL_IMMEDIATELY,
+		0,
+		0,
+		0xffffffff,
+		0
+	);
+	err = null;
+} catch (e) {
+	err = e as Error;
+}
+expect_errno('lockFileExSync (shared)', file_fd, err, 'EWOULDBLOCK');
+
 // Unlock
 tests_run++;
 try {
