@@ -65,9 +65,35 @@ function buildFromSource() {
 	});
 }
 
+/**
+ * Remove binaries for other platforms so downstream tools (e.g. Windows code
+ * signing) never encounter files they cannot process.
+ */
+function removeOtherPlatformBinaries() {
+	var fs = require('fs');
+	var path = require('path');
+	var binDir = path.join(ROOT, 'binaries');
+	try {
+		fs.readdirSync(binDir).forEach(function (file) {
+			if (!file.startsWith('fs-ext-' + process.platform + '-')) {
+				try {
+					fs.unlinkSync(path.join(binDir, file));
+				} catch (e) {
+					// Non-fatal: log and continue.
+					console.log('Could not remove ' + file + ': ' + e.message);
+				}
+			}
+		});
+	} catch (e) {
+		// Non-fatal: binaries directory may not exist if publishing without them.
+		console.log('Could not clean up binaries directory: ' + e.message);
+	}
+}
+
 // Main
 if (tryLoadPrebuilt()) {
 	console.log('Prebuilt binary works, skipping compilation.');
+	removeOtherPlatformBinaries();
 	process.exit(0);
 } else {
 	buildFromSource();
