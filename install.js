@@ -43,6 +43,7 @@ function tryLoadPrebuilt() {
  */
 function buildFromSource() {
 	console.log('Building from source with node-gyp...');
+	require('./patch-nan-v8-14');
 
 	var nodeGyp = process.platform === 'win32' ? 'node-gyp.cmd' : 'node-gyp';
 	var args = ['rebuild'];
