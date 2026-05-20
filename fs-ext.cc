@@ -17,6 +17,11 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#if defined(_MSC_VER) && !defined(__clang__)
+// Electron 42's V8 headers use a Clang/GCC builtin that MSVC does not expose.
+#define __builtin_frame_address(level) nullptr
+#endif
+
 #include <node.h>
 #ifndef _WIN32
 #include <fcntl.h>
