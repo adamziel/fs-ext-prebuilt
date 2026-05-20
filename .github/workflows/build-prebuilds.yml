@@ -1,6 +1,9 @@
 name: Build fs-ext prebuilds
 
 on:
+  schedule:
+    # Check daily for new Node ABI targets and Studio Electron upgrades.
+    - cron: '17 3 * * *'
   push:
     branches: [trunk]
     paths:
@@ -17,11 +20,31 @@ on:
         default: ''
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
+  detect-upstream-targets:
+    name: Detect upstream target changes
+    runs-on: ubuntu-24.04
+    outputs:
+      should_build: ${{ steps.detect.outputs.should_build }}
+      reason: ${{ steps.detect.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect required prebuild targets
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NODE_VERSIONS: ${{ inputs.node_versions }}
+          ELECTRON_VERSION: ${{ inputs.electron_version }}
+        run: node .github/scripts/check-prebuild-targets.js detect
+
   build:
     name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+    needs: detect-upstream-targets
+    if: needs.detect-upstream-targets.outputs.should_build == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -148,11 +171,24 @@ jobs:
       - name: List binaries
         run: ls -la binaries/
 
+      - name: Validate complete binary set
+        env:
+          NODE_VERSIONS: ${{ inputs.node_versions }}
+          ELECTRON_VERSION: ${{ inputs.electron_version }}
+        run: node .github/scripts/check-prebuild-targets.js validate
+
       - name: Commit and push to trunk
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add binaries/ abi-registry.json
+          if git diff --staged --quiet -- binaries; then
+            BINARY_CHANGES=0
+          else
+            BINARY_CHANGES=1
+          fi
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
@@ -167,4 +203,7 @@ jobs:
           Electron version: ${{ inputs.electron_version || 'Studio package.json' }}
           Triggered by: ${{ github.actor }}"
             git push origin trunk
+            if [ "$BINARY_CHANGES" = "1" ]; then
+              gh workflow run publish.yml --ref trunk -f version_bump=patch
+            fi
           fi

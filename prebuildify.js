@@ -7,7 +7,7 @@
 //   REFRESH_ABI=1       - force download of the ABI registry even if cached locally
 //   ABI_REGISTRY_URL    - alternate ABI registry URL
 //   ABI_REGISTRY_PATH   - alternate path to cache the ABI registry
-//   STUDIO_PACKAGE_URL  - alternate package.json URL for Electron lookup
+//   STUDIO_PACKAGE_URL  - alternate Studio package.json URL for Electron lookup
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -24,7 +24,7 @@ const ABI_REGISTRY_PATH =
 	process.env.ABI_REGISTRY_PATH || path.join(ROOT, 'abi-registry.json');
 const STUDIO_PACKAGE_URL =
 	process.env.STUDIO_PACKAGE_URL ||
-	'https://raw.githubusercontent.com/Automattic/studio/trunk/package.json';
+	'https://raw.githubusercontent.com/Automattic/studio/trunk/apps/studio/package.json';
 const NODE_VERSIONS_ENV = process.env.NODE_VERSIONS || '';
 const ELECTRON_VERSION_ENV = process.env.ELECTRON_VERSION || '';
 
