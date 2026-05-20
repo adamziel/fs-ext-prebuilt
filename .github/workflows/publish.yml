@@ -16,6 +16,10 @@ permissions:
     id-token: write # required for OIDC
     contents: write
 
+concurrency:
+    group: publish-npm
+    cancel-in-progress: false
+
 jobs:
     publish:
         name: Bump version and publish
@@ -26,15 +30,12 @@ jobs:
                   ref: trunk
                   fetch-depth: 0
 
-            - name: Use Node.js 22
-              uses: actions/setup-node@v4
+            - name: Use Node.js 24
+              uses: actions/setup-node@v6
               with:
-                  node-version: '22'
+                  node-version: '24'
                   registry-url: 'https://registry.npmjs.org'
-                  cache: 'npm'
-
-            - name: Upgrade npm for trusted publishing
-              run: npm install -g npm@latest
+                  package-manager-cache: false
 
             - name: Configure git
               run: |

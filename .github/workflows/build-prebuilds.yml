@@ -23,6 +23,10 @@ permissions:
   actions: write
   contents: write
 
+concurrency:
+  group: build-prebuilds-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   detect-upstream-targets:
     name: Detect upstream target changes
