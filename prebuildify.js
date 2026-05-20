@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { spawnSync } = require('child_process');
+require('./patch-nan-v8-14');
 
 const ROOT = __dirname;
 const BIN_DIR = path.join(ROOT, 'binaries');

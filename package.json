@@ -25,6 +25,7 @@
 		"dist/",
 		"load-prebuilt.js",
 		"install.js",
+		"patch-nan-v8-14.js",
 		"binaries/",
 		"binding.gyp",
 		"fs-ext.cc",
@@ -34,7 +35,7 @@
 		"node": ">= 8.0.0"
 	},
 	"dependencies": {
-		"nan": "^2.24.0"
+		"nan": "^2.27.0"
 	},
 	"license": "MIT",
 	"bugs": {
