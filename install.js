@@ -73,9 +73,27 @@ function removeOtherPlatformBinaries() {
 	var fs = require('fs');
 	var path = require('path');
 	var binDir = path.join(ROOT, 'binaries');
+	var currentPlatformPrefix = 'fs-ext-' + process.platform + '-';
 	try {
-		fs.readdirSync(binDir).forEach(function (file) {
-			if (!file.startsWith('fs-ext-' + process.platform + '-')) {
+		var files = fs.readdirSync(binDir);
+
+		// Safety check: only clean up if at least one file matches the expected
+		// naming scheme. If none do, the scheme may have changed and deleting
+		// would wipe every binary.
+		var hasCurrentPlatformBinaries = files.some(function (file) {
+			return file.startsWith(currentPlatformPrefix);
+		});
+		if (!hasCurrentPlatformBinaries) {
+			console.log(
+				'No binaries matching ' +
+					currentPlatformPrefix +
+					'* found, skipping cleanup.'
+			);
+			return;
+		}
+
+		files.forEach(function (file) {
+			if (!file.startsWith(currentPlatformPrefix)) {
 				try {
 					fs.unlinkSync(path.join(binDir, file));
 				} catch (e) {
