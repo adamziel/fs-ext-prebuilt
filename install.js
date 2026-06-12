@@ -66,9 +66,53 @@ function buildFromSource() {
 	});
 }
 
+/**
+ * Remove binaries for other platforms so downstream tools (e.g. Windows code
+ * signing) never encounter files they cannot process.
+ */
+function removeOtherPlatformBinaries() {
+	var fs = require('fs');
+	var path = require('path');
+	var binDir = path.join(ROOT, 'binaries');
+	var currentPlatformPrefix = 'fs-ext-' + process.platform + '-';
+	try {
+		var files = fs.readdirSync(binDir);
+
+		// Safety check: only clean up if at least one file matches the expected
+		// naming scheme. If none do, the scheme may have changed and deleting
+		// would wipe every binary.
+		var hasCurrentPlatformBinaries = files.some(function (file) {
+			return file.startsWith(currentPlatformPrefix);
+		});
+		if (!hasCurrentPlatformBinaries) {
+			console.log(
+				'No binaries matching ' +
+					currentPlatformPrefix +
+					'* found, skipping cleanup.'
+			);
+			return;
+		}
+
+		files.forEach(function (file) {
+			if (!file.startsWith(currentPlatformPrefix)) {
+				try {
+					fs.unlinkSync(path.join(binDir, file));
+				} catch (e) {
+					// Non-fatal: log and continue.
+					console.log('Could not remove ' + file + ': ' + e.message);
+				}
+			}
+		});
+	} catch (e) {
+		// Non-fatal: binaries directory may not exist if publishing without them.
+		console.log('Could not clean up binaries directory: ' + e.message);
+	}
+}
+
 // Main
 if (tryLoadPrebuilt()) {
 	console.log('Prebuilt binary works, skipping compilation.');
+	removeOtherPlatformBinaries();
 	process.exit(0);
 } else {
 	buildFromSource();
