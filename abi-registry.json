@@ -1,6 +1,12 @@
 {
   "NODE_MODULE_VERSION": [
     {
+      "modules": 150,
+      "runtime": "electron",
+      "variant": "electron",
+      "versions": "45"
+    },
+    {
       "modules": 149,
       "runtime": "electron",
       "variant": "electron",
