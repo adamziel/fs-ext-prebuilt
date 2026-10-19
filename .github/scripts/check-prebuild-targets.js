@@ -4,7 +4,9 @@ const {
 	expectedFiles,
 	platforms,
 } = require('./prebuild-targets');
+const { fingerprint } = require('./prepare-release');
 
+/** Detects changed package inputs, or validates the frozen target's binary set. */
 async function main() {
 	const mode = process.argv[2] || 'detect';
 	const snapshotPath = 'prebuild-targets.json';
@@ -32,16 +34,20 @@ async function main() {
 	}
 	const snapshot = JSON.stringify(targets, null, 2) + '\n';
 	fs.writeFileSync(snapshotPath, snapshot);
+	const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+	// A failed push run can leave new source beside the previous binary set.
+	// Only a package matching the saved release fingerprint may skip tests.
+	const packageUnchanged =
+		missing.length === 0 &&
+		extra.length === 0 &&
+		pkg.prebuiltFingerprint === fingerprint(targets);
 	const shouldBuild =
-		process.env.EVENT_NAME !== 'schedule' ||
-		missing.length > 0 ||
-		extra.length > 0 ||
-		previous !== snapshot;
+		process.env.EVENT_NAME !== 'schedule' || !packageUnchanged;
 	setOutput('platforms', JSON.stringify(platforms));
 	setOutput('should_build', String(shouldBuild));
 	setOutput(
 		'reason',
-		`${missing.length} missing, ${extra.length} unexpected binaries; snapshot changed: ${previous !== snapshot}`,
+		`${missing.length} missing, ${extra.length} unexpected binaries; snapshot changed: ${previous !== snapshot}; package unchanged: ${packageUnchanged}`,
 	);
 	setOutput(
 		'node_versions',

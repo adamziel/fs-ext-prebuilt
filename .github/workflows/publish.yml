@@ -12,15 +12,12 @@ on:
                     - minor
                     - major
 
-    workflow_call:
-        inputs:
-            version_bump:
-                type: string
-                required: true
             only_if_needed:
+                description: 'Publish only changed package inputs, or retry an unpublished version'
                 type: boolean
                 default: false
             source_ref:
+                description: 'Exact tested commit (defaults to trunk for manual releases)'
                 type: string
                 default: ''
 

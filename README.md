@@ -137,7 +137,12 @@ compilation cannot hide a missing prebuild.
 The publisher stores a fingerprint of the binary set and runtime sources in npm
 metadata. Unchanged builds do not consume another version. If publication fails
 after the version commit, the next daily run retries that unpublished version.
-Tags are pushed after npm publication succeeds.
+Changed sources, build settings, or dependencies require another build and test
+run, even when the ABI list is unchanged. Tags are pushed after npm publication
+succeeds.
+
+Automatic builds dispatch a separate `publish.yml` run at the tested commit.
+This preserves the existing npm trusted-publisher workflow identity.
 
 For a local build, run `node prebuildify.js`. `NODE_VERSIONS` can select newer
 released headers for an ABI without dropping the other supported ABIs.

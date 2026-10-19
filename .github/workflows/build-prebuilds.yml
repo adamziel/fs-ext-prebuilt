@@ -227,7 +227,7 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   publish:
-    name: Publish or retry the pending release
+    name: Dispatch publication or retry the pending release
     needs: [detect-upstream-targets, build, test, commit]
     if: >-
       always() && github.ref == 'refs/heads/trunk' &&
@@ -235,10 +235,15 @@ jobs:
       (needs.detect-upstream-targets.outputs.should_build == 'false' ||
       (needs.build.result == 'success' && needs.test.result == 'success' && needs.commit.result == 'success'))
     permissions:
-      contents: write
-      id-token: write
-    uses: ./.github/workflows/publish.yml
-    with:
-      version_bump: patch
-      only_if_needed: true
-      source_ref: ${{ needs.commit.outputs.sha || github.sha }}
+      actions: write
+    runs-on: ubuntu-24.04
+    steps:
+      # Keep npm authentication under publish.yml. A reusable call would
+      # authenticate as this build workflow instead, so dispatch the tested SHA.
+      - name: Dispatch the trusted publish workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ needs.commit.outputs.sha || github.sha }}
+        run: |
+          gh workflow run publish.yml --repo "$GITHUB_REPOSITORY" --ref trunk \
+            -f version_bump=patch -f only_if_needed=true -f source_ref="$SOURCE_REF"

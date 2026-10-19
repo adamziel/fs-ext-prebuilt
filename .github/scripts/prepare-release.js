@@ -56,18 +56,39 @@ function releaseAction(published, digest, onlyIfNeeded) {
 		: 'bump';
 }
 
+/**
+ * Hashes package and build inputs, excluding release version bookkeeping.
+ * A pending version can then be retried without treating its version bump as
+ * an untested source change.
+ */
 function fingerprint(targets) {
 	const hash = crypto.createHash('sha256');
 	const files = [
+		'package.json',
+		'package-lock.json',
 		'prebuild-targets.json',
 		'src/fs-ext.ts',
+		'tsconfig.json',
+		'fs-ext.cc',
+		'binding.gyp',
 		'load-prebuilt.js',
 		'install.js',
 		'patch-nan-v8-14.js',
+		'README.md',
+		'LICENSE.txt',
 		...expectedFiles(targets).map((file) => `binaries/${file}`),
 	].sort();
 	for (const file of files) {
-		const content = fs.readFileSync(file);
+		let content = fs.readFileSync(file);
+		if (file === 'package.json' || file === 'package-lock.json') {
+			const metadata = JSON.parse(content);
+			delete metadata.version;
+			delete metadata.prebuiltFingerprint;
+			if (metadata.packages) {
+				delete metadata.packages[''].version;
+			}
+			content = Buffer.from(JSON.stringify(metadata));
+		}
 		hash.update(`${file}\0${content.length}\0`);
 		hash.update(content);
 	}

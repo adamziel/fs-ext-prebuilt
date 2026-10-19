@@ -136,6 +136,81 @@ test('the release fingerprint changes with binary contents and rejects missing b
 	});
 });
 
+test('scheduled retries require the same tested package inputs', () => {
+	withBinaryTree((targets) => {
+		const fs = require('fs');
+		const { execFileSync } = require('child_process');
+		const { fingerprint } = require('../.github/scripts/prepare-release');
+		const selector = require.resolve('../.github/scripts/prebuild-targets');
+		const detector = require.resolve('../.github/scripts/check-prebuild-targets');
+		fs.writeFileSync(
+			'freeze-targets.cjs',
+			`require(${JSON.stringify(selector)}).resolveTargets = async () => ${JSON.stringify(targets)};`,
+		);
+		/** Runs the real scheduled detector with upstream discovery stubbed. */
+		const detect = () =>
+			execFileSync(process.execPath, ['--require', './freeze-targets.cjs', detector], {
+				env: { ...process.env, EVENT_NAME: 'schedule', GITHUB_OUTPUT: '' },
+				encoding: 'utf8',
+			});
+		assert.match(detect(), /should_build=true/);
+		const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+		pkg.prebuiltFingerprint = fingerprint(targets);
+		fs.writeFileSync('package.json', JSON.stringify(pkg));
+		assert.match(detect(), /should_build=false/);
+
+		// A failed push run leaves the old binaries and target snapshot in Git.
+		// The next daily run must test the changed wrapper instead of publishing it.
+		fs.writeFileSync('src/fs-ext.ts', 'throw new Error("untested runtime change");');
+		assert.match(detect(), /should_build=true/);
+	});
+});
+
+test('the fingerprint includes native sources, build settings, and package dependencies', () => {
+	withBinaryTree((targets) => {
+		const fs = require('fs');
+		const { fingerprint } = require('../.github/scripts/prepare-release');
+		const before = fingerprint(targets);
+		// Keep the fingerprint aligned with the files shipped in the package.
+		const pkg = require('../package.json');
+		assert.deepEqual(pkg.files.filter((file) => file.endsWith('/')), ['dist/', 'binaries/']);
+		for (const file of [...pkg.files.filter((file) => !file.endsWith('/')), 'tsconfig.json']) {
+			const original = fs.readFileSync(file);
+			fs.appendFileSync(file, '\nchanged shipped file');
+			assert.notEqual(fingerprint(targets), before, file);
+			fs.writeFileSync(file, original);
+		}
+		for (const file of ['package.json', 'package-lock.json']) {
+			const original = fs.readFileSync(file);
+			const metadata = JSON.parse(original);
+			metadata.dependencies = { nan: '^2.28.0' };
+			fs.writeFileSync(file, JSON.stringify(metadata));
+			assert.notEqual(fingerprint(targets), before, file);
+			fs.writeFileSync(file, original);
+		}
+	});
+});
+
+test('release version bookkeeping leaves the tested fingerprint unchanged', () => {
+	withBinaryTree((targets) => {
+		const fs = require('fs');
+		const { fingerprint } = require('../.github/scripts/prepare-release');
+		const before = fingerprint(targets);
+		for (const file of ['package.json', 'package-lock.json']) {
+			const metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
+			metadata.version = '2.2.15';
+			if (file === 'package.json') {
+				metadata.prebuiltFingerprint = before;
+			} else {
+				metadata.packages[''].version = metadata.version;
+			}
+			fs.writeFileSync(file, JSON.stringify(metadata));
+		}
+		assert.equal(fingerprint(targets), before);
+	});
+});
+
+/** Runs a release check against a complete temporary package and binary set. */
 function withBinaryTree(check) {
 	const fs = require('fs');
 	const path = require('path');
@@ -147,7 +222,10 @@ function withBinaryTree(check) {
 		process.chdir(dir);
 		fs.mkdirSync('binaries');
 		fs.mkdirSync('src');
-		fs.writeFileSync('prebuild-targets.json', JSON.stringify(targets));
+		fs.writeFileSync('prebuild-targets.json', JSON.stringify(targets, null, 2) + '\n');
+		for (const file of ['package.json', 'package-lock.json']) {
+			fs.copyFileSync(path.join(__dirname, '..', file), file);
+		}
 		for (const file of expectedFiles(targets)) {
 			fs.writeFileSync(`binaries/${file}`, 'native addon');
 		}
@@ -156,6 +234,11 @@ function withBinaryTree(check) {
 			'load-prebuilt.js',
 			'install.js',
 			'patch-nan-v8-14.js',
+			'fs-ext.cc',
+			'binding.gyp',
+			'tsconfig.json',
+			'README.md',
+			'LICENSE.txt',
 		]) {
 			fs.writeFileSync(file, 'runtime source');
 		}
