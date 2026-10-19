@@ -169,7 +169,8 @@ jobs:
         run: |
           "$PREBUILD_TEST_NODE" --version
           "$PREBUILD_TEST_NODE" --test tests/prebuild-targets.test.js tests/load-prebuilt.test.js
-          "$PREBUILD_TEST_NODE" node_modules/tsx/dist/cli.mjs ./run_tests.ts
+          # These tests are CommonJS. The full tsx launcher hangs on Node 20.0.0.
+          "$PREBUILD_TEST_NODE" --require tsx/cjs ./run_tests.ts
           "$PREBUILD_TEST_NODE" node_modules/jest/bin/jest.js tests/fcntl-range-locks.test.ts
 
       - name: Pack the npm package
