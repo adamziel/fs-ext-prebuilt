@@ -135,6 +135,17 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Remember the target Node executable
+        run: node -e "require('fs').appendFileSync(process.env.GITHUB_ENV, 'PREBUILD_TEST_NODE=' + process.execPath + '\n')"
+
+      # Keep npm and build tools on Node 24. Only the native tests need to run
+      # in the target runtime; older bundled npm versions can fail to pack.
+      - name: Use Node.js 24 for package tooling
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          check-latest: true
+
       - name: Replace checked-in binaries with this run's artifacts
         run: |
           node -e "require('fs').rmSync('binaries', { recursive: true, force: true })"
@@ -147,8 +158,18 @@ jobs:
       - name: Install test dependencies without compiling a local addon
         run: npm ci --ignore-scripts
 
+      - name: Compile the package and test workers
+        run: |
+          npm run build
+          npm run build:workers
+
       - name: Run native lock tests in the target runtime
-        run: npm test
+        shell: bash
+        run: |
+          "$PREBUILD_TEST_NODE" --version
+          "$PREBUILD_TEST_NODE" --test tests/prebuild-targets.test.js tests/load-prebuilt.test.js
+          "$PREBUILD_TEST_NODE" node_modules/tsx/dist/cli.mjs ./run_tests.ts
+          "$PREBUILD_TEST_NODE" node_modules/jest/bin/jest.js tests/fcntl-range-locks.test.ts
 
       - name: Pack the npm package
         run: npm pack --ignore-scripts
