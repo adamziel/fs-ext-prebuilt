@@ -120,3 +120,38 @@ Available via `require('fs-ext-extra-prebuilt').constants`:
 ## License
 
 MIT
+
+## Automatic prebuild releases
+
+The daily build workflow reads released Node versions and their module ABIs from
+`https://nodejs.org/dist/index.json`. It keeps one build target per ABI, starting
+at Node 20. A new patch with the same ABI does not trigger another build. The
+Electron target still follows Studio's package version.
+
+Detection writes `prebuild-targets.json`. Every build and validation job uses
+that same snapshot. All six platform/architecture combinations are required,
+including Windows ARM64. Node binaries are tested in their target Node runtimes,
+and each packed npm tarball is installed with scripts disabled so a local
+compilation cannot hide a missing prebuild.
+
+The publisher stores a fingerprint of the binary set and runtime sources in npm
+metadata. Unchanged builds do not consume another version. If publication fails
+after the version commit, the next daily run retries that unpublished version.
+Re-running the failed publish job also reuses its pending version commit. It
+does not include newer, untested trunk changes.
+Changed sources, build settings, or dependencies require another build and test
+run, even when the ABI list is unchanged. Tags are pushed after npm publication
+succeeds.
+
+Automatic builds dispatch a separate `publish.yml` run at the tested commit.
+This preserves the existing npm trusted-publisher workflow identity.
+
+For a local build, run `node prebuildify.js`. `NODE_VERSIONS` can select newer
+released headers for an ABI without dropping the other supported ABIs.
+`ELECTRON_VERSION` selects an exact Electron version instead of Studio's version.
+CI sets `PREBUILD_TARGETS_PATH` to use its frozen snapshot.
+
+New binaries use the runtime's actual module ABI in their filename. The loader
+also matches platform, architecture, and Linux libc. Existing exact-major legacy
+binaries remain usable during rollout; it no longer guesses a lower Node major
+or tries a Node binary inside Electron.

@@ -23,75 +23,32 @@ var cachedSource = null;
 function findPrebuiltBinary() {
 	var platform = process.platform;
 	var arch = process.arch;
-	var nodeVersionNum = parseInt(process.versions.node.split('.')[0], 10);
-
-	// Check if running in Electron
-	var isElectron = !!(process.versions && process.versions.electron);
-	var electronVersion = isElectron ? process.versions.electron : null;
-
-	var files;
-	try {
-		files = fs.readdirSync(BINARIES_DIR);
-	} catch (e) {
-		return null;
-	}
-
-	// Filter files that match our platform/arch
-	// Format: fs-ext-{platform}-{arch}[-libc]-{runtime}-{version}.node
+	// Check if running in Electron. Never substitute a Node binary in that runtime.
+	var runtime = process.versions.electron ? 'electron' : 'node';
 	var platformArch = platform + '-' + arch;
-	var candidates = files.filter(function (f) {
-		return (
-			f.startsWith('fs-ext-') &&
-			f.includes(platformArch) &&
-			f.endsWith('.node')
-		);
-	});
+	var libc = '';
+	if (platform === 'linux') {
+		libc = process.report && process.report.getReport().header.glibcVersionRuntime
+			? 'glibc' : 'musl';
+	}
+	var binaryPlatform = platformArch + (libc ? '-' + libc : '');
+	// Match platform/arch, Linux libc, runtime, and the actual module ABI.
+	// Format: fs-ext-{platform}-{arch}[-libc]-{runtime}-abi{modules}.node
+	var exactAbi = 'fs-ext-' + binaryPlatform + '-' + runtime + '-abi' + process.versions.modules + '.node';
+	if (fs.existsSync(path.join(BINARIES_DIR, exactAbi))) {
+		return exactAbi;
+	}
 
-	if (candidates.length === 0) {
+	// Keep existing release binaries usable until the first ABI-named build.
+	// Older Linux binaries were built on glibc and cannot run on musl.
+	if (libc === 'musl') {
 		return null;
 	}
-
-	// Try Electron binary first
-	if (isElectron && electronVersion) {
-		var electronBinary = candidates.find(function (f) {
-			return f.includes('electron-' + electronVersion);
-		});
-		if (electronBinary) {
-			return electronBinary;
-		}
-	}
-
-	// Try to find exact Node version match
-	var nodeVersion = nodeVersionNum + '.0.0';
-	var nodeBinary = candidates.find(function (f) {
-		return f.includes('node-' + nodeVersion);
-	});
-
-	if (nodeBinary) {
-		return nodeBinary;
-	}
-
-	// Find highest version <= current
-	var nodeCandidates = candidates
-		.filter(function (f) {
-			return f.includes('-node-');
-		})
-		.map(function (f) {
-			var match = f.match(/-node-(\d+)\./);
-			return match ? { file: f, version: parseInt(match[1], 10) } : null;
-		})
-		.filter(function (c) {
-			return c && c.version <= nodeVersionNum;
-		})
-		.sort(function (a, b) {
-			return b.version - a.version;
-		});
-
-	if (nodeCandidates.length > 0) {
-		return nodeCandidates[0].file;
-	}
-
-	return null;
+	var version = runtime === 'electron'
+		? process.versions.electron
+		: process.versions.node.split('.')[0] + '.0.0';
+	var legacy = 'fs-ext-' + platformArch + '-' + runtime + '-' + version + '.node';
+	return fs.existsSync(path.join(BINARIES_DIR, legacy)) ? legacy : null;
 }
 
 /**

@@ -1,145 +1,56 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 // Cross-platform prebuild runner.
-// Environment overrides:
-//   NODE_VERSIONS       - comma/space list of Node versions (default: stable >=20 from ABI registry)
-//   ELECTRON_VERSION    - Electron version override (default: Automattic/studio package.json)
-//   REFRESH_ABI=1       - force download of the ABI registry even if cached locally
-//   ABI_REGISTRY_URL    - alternate ABI registry URL
-//   ABI_REGISTRY_PATH   - alternate path to cache the ABI registry
-//   STUDIO_PACKAGE_URL  - alternate Studio package.json URL for Electron lookup
+// NODE_VERSIONS can select newer released headers for an ABI without dropping
+// other ABIs. ELECTRON_VERSION overrides Studio's exact Electron version.
+// PREBUILD_TARGETS_PATH freezes the target list across CI build/validation jobs.
+// ABI_REGISTRY_URL overrides the registry used for Electron ABI lookup.
+// STUDIO_PACKAGE_URL overrides the Studio package.json URL for Electron lookup.
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const { spawnSync } = require('child_process');
 require('./patch-nan-v8-14');
+const { resolveTargets, binaryName } = require('./.github/scripts/prebuild-targets');
 
 const ROOT = __dirname;
 const BIN_DIR = path.join(ROOT, 'binaries');
 const PREBUILD_DIR = path.join(ROOT, 'prebuilds');
 
-const ABI_REGISTRY_URL =
-	process.env.ABI_REGISTRY_URL ||
-	'https://raw.githubusercontent.com/nodejs/node/main/doc/abi_version_registry.json';
-const ABI_REGISTRY_PATH =
-	process.env.ABI_REGISTRY_PATH || path.join(ROOT, 'abi-registry.json');
-const STUDIO_PACKAGE_URL =
-	process.env.STUDIO_PACKAGE_URL ||
-	'https://raw.githubusercontent.com/Automattic/studio/trunk/apps/studio/package.json';
-const NODE_VERSIONS_ENV = process.env.NODE_VERSIONS || '';
-const ELECTRON_VERSION_ENV = process.env.ELECTRON_VERSION || '';
-
 const STRIP_SUPPORTED = process.platform !== 'win32';
 const TAG_LIBC = process.platform === 'linux';
+const LIBC = TAG_LIBC
+	? process.env.PREBUILD_LIBC || (process.report.getReport().header.glibcVersionRuntime ? 'glibc' : 'musl')
+	: '';
 
-function fetchJson(url) {
-	return new Promise((resolve, reject) => {
-		https
-			.get(url, (res) => {
-				const { statusCode, headers } = res;
-				if (statusCode >= 300 && statusCode < 400 && headers.location) {
-					// Follow redirects (GitHub raw redirects frequently)
-					res.resume();
-					return resolve(fetchJson(headers.location));
-				}
+async function main() {
+	const targets = process.env.PREBUILD_TARGETS_PATH
+		? JSON.parse(fs.readFileSync(process.env.PREBUILD_TARGETS_PATH, 'utf8'))
+		: await resolveTargets();
+	console.log('Building prebuild targets:', targets);
+	const architectures = getArchitectures();
+	console.log(`Platform: ${process.platform}, Architecture: ${architectures.join(', ')}`);
 
-				if (statusCode < 200 || statusCode >= 300) {
-					res.resume();
-					return reject(
-						new Error(
-							`Request failed for ${url} with status ${statusCode}`
-						)
-					);
-				}
+	cleanDir(BIN_DIR);
 
-				let data = '';
-				res.setEncoding('utf8');
-				res.on('data', (chunk) => {
-					data += chunk;
-				});
-				res.on('end', () => {
-					try {
-						resolve(JSON.parse(data));
-					} catch (err) {
-						reject(err);
-					}
-				});
-			})
-			.on('error', reject);
-	});
+	targets.forEach(runPrebuild);
+	fs.writeFileSync(path.join(ROOT, 'prebuild-targets.json'), JSON.stringify(targets, null, 2) + '\n');
+
+	fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
+
+	console.log('\n=== Build complete ===');
+	console.log(`Binaries are available in ${BIN_DIR}`);
 }
 
-function cleanDir(dirPath) {
-	fs.rmSync(dirPath, { recursive: true, force: true });
-	fs.mkdirSync(dirPath, { recursive: true });
-}
-
-async function ensureAbiRegistry() {
-	const shouldRefresh =
-		process.env.REFRESH_ABI === '1' || !fs.existsSync(ABI_REGISTRY_PATH);
-
-	if (shouldRefresh) {
-		console.log('Fetching ABI registry...');
-		const registry = await fetchJson(ABI_REGISTRY_URL);
-		fs.writeFileSync(ABI_REGISTRY_PATH, JSON.stringify(registry, null, 2));
-		return registry;
+function runPrebuild(target) {
+	const architectures = getArchitectures();
+	for (const arch of architectures) {
+		runPrebuildForArch(target, arch);
 	}
-
-	return JSON.parse(fs.readFileSync(ABI_REGISTRY_PATH, 'utf8'));
 }
 
-function parseNodeVersions(registry) {
-	if (NODE_VERSIONS_ENV.trim()) {
-		return NODE_VERSIONS_ENV.split(/[\s,]+/).filter(Boolean);
-	}
-
-	const entries = registry.NODE_MODULE_VERSION || [];
-	const versions = entries
-		.filter((entry) => entry.runtime === 'node')
-		.map((entry) => entry.versions)
-		.filter(Boolean)
-		.filter((version) => !String(version).endsWith('-pre'))
-		.filter((version) => {
-			const major = parseInt(String(version).split('.')[0], 10);
-			return Number.isFinite(major) && major >= 20;
-		});
-
-	const unique = Array.from(new Set(versions));
-	unique.sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
-	return unique;
-}
-
-async function resolveElectronVersion() {
-	if (ELECTRON_VERSION_ENV.trim()) {
-		return ELECTRON_VERSION_ENV.trim().replace(/^[^0-9]*/, '');
-	}
-
-	console.log('Fetching Electron version from Automattic/studio...');
-	const studioPackage = await fetchJson(STUDIO_PACKAGE_URL);
-	const electron =
-		studioPackage?.devDependencies?.electron ||
-		studioPackage?.dependencies?.electron ||
-		'';
-
-	if (!electron) {
-		throw new Error(
-			'Unable to determine Electron version from Studio package.json'
-		);
-	}
-
-	return electron.replace(/^[^0-9]*/, '');
-}
-
-// Determine which architectures to build for based on platform.
-// We build for the native architecture only. CI uses separate runners for
-// each platform/architecture combination.
-function getArchitectures() {
-	// Always build for native architecture only.
-	// CI uses separate runners for x64 and arm64 on all platforms.
-	return [process.arch];
-}
-
-function runPrebuildForArch(targetLabel, targetSpec, arch) {
+function runPrebuildForArch(target, arch) {
+	const targetLabel = `${target.runtime}-${target.version} (ABI ${target.abi})`;
+	const targetSpec = `${target.runtime}@${target.version}`;
 	console.log(`\n=== Building for ${targetLabel} [${arch}] (${targetSpec}) ===`);
 
 	fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
@@ -205,7 +116,8 @@ function runPrebuildForArch(targetLabel, targetSpec, arch) {
 		}
 
 		artifacts.forEach((file) => {
-			const destinationName = `fs-ext-${dirent.name}-${targetLabel}.node`;
+			const platform = dirent.name + (LIBC ? '-' + LIBC : '');
+			const destinationName = binaryName(platform, target);
 			const destination = path.join(BIN_DIR, destinationName);
 			fs.copyFileSync(path.join(buildDir, file), destination);
 			console.log(`  → ${destinationName}`);
@@ -213,44 +125,21 @@ function runPrebuildForArch(targetLabel, targetSpec, arch) {
 	});
 }
 
-function runPrebuild(targetLabel, targetSpec) {
-	const architectures = getArchitectures();
-	for (const arch of architectures) {
-		runPrebuildForArch(targetLabel, targetSpec, arch);
-	}
+// Determine which architectures to build for based on platform.
+// We build for the native architecture only. CI uses separate runners for
+// each platform/architecture combination.
+function getArchitectures() {
+	// Always build for native architecture only.
+	// CI uses separate runners for x64 and arm64 on all platforms.
+	return [process.arch];
 }
 
-(async () => {
-	const registry = await ensureAbiRegistry();
-	const nodeVersions = parseNodeVersions(registry);
-	const electronVersion = await resolveElectronVersion();
+function cleanDir(dirPath) {
+	fs.rmSync(dirPath, { recursive: true, force: true });
+	fs.mkdirSync(dirPath, { recursive: true });
+}
 
-	if (!nodeVersions.length) {
-		throw new Error(
-			'No Node.js versions selected. Set NODE_VERSIONS to override.'
-		);
-	}
-
-	console.log(
-		`Building prebuilds for Node.js versions: ${nodeVersions.join(', ')}`
-	);
-	console.log(`Electron target: ${electronVersion}`);
-	const architectures = getArchitectures();
-	console.log(`Platform: ${process.platform}, Architecture: ${architectures.join(', ')}`);
-
-	cleanDir(BIN_DIR);
-
-	nodeVersions.forEach((version) => {
-		runPrebuild(`node-${version}`, `node@${version}`);
-	});
-
-	runPrebuild(`electron-${electronVersion}`, `electron@${electronVersion}`);
-
-	fs.rmSync(PREBUILD_DIR, { recursive: true, force: true });
-
-	console.log('\n=== Build complete ===');
-	console.log(`Binaries are available in ${BIN_DIR}`);
-})().catch((err) => {
+main().catch((err) => {
 	console.error(err);
 	process.exit(1);
 });

@@ -8,24 +8,32 @@ on:
     branches: [trunk]
     paths:
       - 'fs-ext.cc'
+      - 'binding.gyp'
+      - 'src/**'
+      - 'prebuildify.js'
+      - 'load-prebuilt.js'
+      - 'install.js'
+      - 'patch-nan-v8-14.js'
+      - '.github/**'
+  pull_request:
+    branches: [trunk]
   workflow_dispatch:
     inputs:
       node_versions:
-        description: 'Optional comma/space separated Node.js versions (defaults to >=20 from ABI registry)'
+        description: 'Optional released Node versions to select newer headers without dropping other ABIs'
         required: false
         default: ''
       electron_version:
-        description: 'Optional Electron version override'
+        description: 'Optional exact Electron version override'
         required: false
         default: ''
 
 permissions:
-  actions: write
-  contents: write
+  contents: read
 
 concurrency:
   group: build-prebuilds-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   detect-upstream-targets:
@@ -33,9 +41,13 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       should_build: ${{ steps.detect.outputs.should_build }}
-      reason: ${{ steps.detect.outputs.reason }}
+      node_versions: ${{ steps.detect.outputs.node_versions }}
+      platforms: ${{ steps.detect.outputs.platforms }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Test target selection, loading, and release decisions
+        run: node --test tests/prebuild-targets.test.js tests/load-prebuilt.test.js
 
       - name: Detect required prebuild targets
         id: detect
@@ -45,58 +57,41 @@ jobs:
           ELECTRON_VERSION: ${{ inputs.electron_version }}
         run: node .github/scripts/check-prebuild-targets.js detect
 
+      - name: Freeze target snapshot for all jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuild-targets
+          path: prebuild-targets.json
+          if-no-files-found: error
+
   build:
-    name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+    name: Build on ${{ matrix.platform.os }} (${{ matrix.platform.arch }})
     needs: detect-upstream-targets
     if: needs.detect-upstream-targets.outputs.should_build == 'true'
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # macOS arm64 (Apple Silicon)
-          - os: macos
-            arch: arm64
-            runner: macos-14
-          # macOS x64 (Intel)
-          - os: macos
-            arch: x64
-            runner: macos-15-intel
-          # Linux x64
-          - os: linux
-            arch: x64
-            runner: ubuntu-24.04
-          # Linux arm64
-          - os: linux
-            arch: arm64
-            runner: ubuntu-24.04-arm
-          # Windows x64
-          - os: windows
-            arch: x64
-            runner: windows-2022
-          # Windows arm64 (runner may not be available in all repos)
-          - os: windows
-            arch: arm64
-            runner: windows-11-arm
-            optional: true
-
-    # Allow Windows ARM64 to fail if runner is unavailable
-    continue-on-error: ${{ matrix.optional == true }}
-
+        platform: ${{ fromJSON(needs.detect-upstream-targets.outputs.platforms) }}
+    env:
+      PREBUILD_TARGETS_PATH: prebuild-targets.json
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Use Node.js 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuild-targets
+          path: .
+
+      - name: Use Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           check-latest: true
           cache: 'npm'
 
       - name: Install LLVM Clang (macOS)
-        if: matrix.os == 'macos'
+        if: matrix.platform.os == 'macos'
         run: |
           brew install llvm
           echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
@@ -105,53 +100,104 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Build prebuilds (macOS)
-        if: matrix.os == 'macos'
+        if: matrix.platform.os == 'macos'
         env:
-          NODE_VERSIONS: ${{ inputs.node_versions }}
-          ELECTRON_VERSION: ${{ inputs.electron_version }}
-          REFRESH_ABI: 1
           # Use LLVM Clang on macOS for full C++20 NTTP support (Apple Clang lacks it)
           CC: clang
           CXX: clang++
         run: node prebuildify.js
 
       - name: Build prebuilds
-        if: matrix.os != 'macos'
-        env:
-          NODE_VERSIONS: ${{ inputs.node_versions }}
-          ELECTRON_VERSION: ${{ inputs.electron_version }}
-          REFRESH_ABI: 1
+        if: matrix.platform.os != 'macos'
         run: node prebuildify.js
-
-      - name: List built binaries
-        run: ls -la binaries/
-        shell: bash
-
-      - name: Run tests
-        run: npm test
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.os }}-${{ matrix.arch }}
+          name: binaries-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
           path: binaries/*.node
+          if-no-files-found: error
 
-      - name: Upload ABI registry (once)
-        if: matrix.os == 'linux' && matrix.arch == 'x64'
-        uses: actions/upload-artifact@v4
+  test:
+    name: Test Node ${{ matrix.node }} on ${{ matrix.platform.os }} (${{ matrix.platform.arch }})
+    needs: [detect-upstream-targets, build]
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(needs.detect-upstream-targets.outputs.node_versions) }}
+        platform: ${{ fromJSON(needs.detect-upstream-targets.outputs.platforms) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the target Node runtime
+        uses: actions/setup-node@v4
         with:
-          name: abi-registry
-          path: abi-registry.json
+          node-version: ${{ matrix.node }}
+
+      - name: Remember the target Node executable
+        run: node -e "require('fs').appendFileSync(process.env.GITHUB_ENV, 'PREBUILD_TEST_NODE=' + process.execPath + '\n')"
+
+      # Keep npm and build tools on Node 24. Only the native tests need to run
+      # in the target runtime; older bundled npm versions can fail to pack.
+      - name: Use Node.js 24 for package tooling
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          check-latest: true
+
+      - name: Replace checked-in binaries with this run's artifacts
+        run: |
+          node -e "require('fs').rmSync('binaries', { recursive: true, force: true })"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+          path: binaries
+
+      - name: Install test dependencies without compiling a local addon
+        run: npm ci --ignore-scripts
+
+      - name: Compile the package and test workers
+        shell: bash
+        run: |
+          npm run build
+          npm run build:workers
+
+      - name: Run native lock tests in the target runtime
+        shell: bash
+        run: |
+          "$PREBUILD_TEST_NODE" --version
+          "$PREBUILD_TEST_NODE" --test tests/prebuild-targets.test.js tests/load-prebuilt.test.js
+          # These tests are CommonJS. The full tsx launcher hangs on Node 20.0.0.
+          "$PREBUILD_TEST_NODE" --require tsx/cjs ./run_tests.ts
+          "$PREBUILD_TEST_NODE" node_modules/jest/bin/jest.js tests/fcntl-range-locks.test.ts
+
+      - name: Pack the npm package
+        run: npm pack --ignore-scripts
+
+      - name: Test installation without install scripts or a local build
+        shell: bash
+        run: node tests/packed-prebuild.cjs fs-ext-extra-prebuilt-*.tgz
 
   commit:
-    name: Commit binaries to trunk
-    needs: build
+    name: Commit tested binaries to trunk
+    needs: [build, test]
+    if: github.ref == 'refs/heads/trunk'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: trunk
           fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prebuild-targets
+          path: .
 
       - name: Prepare workspace
         run: |
@@ -165,49 +211,39 @@ jobs:
           merge-multiple: true
           path: binaries
 
-      - name: Download ABI registry
-        uses: actions/download-artifact@v4
-        with:
-          name: abi-registry
-          path: .
-        continue-on-error: true
-
-      - name: List binaries
-        run: ls -la binaries/
-
       - name: Validate complete binary set
-        env:
-          NODE_VERSIONS: ${{ inputs.node_versions }}
-          ELECTRON_VERSION: ${{ inputs.electron_version }}
         run: node .github/scripts/check-prebuild-targets.js validate
 
       - name: Commit and push to trunk
-        env:
-          GH_TOKEN: ${{ github.token }}
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add binaries/ abi-registry.json
-          if git diff --staged --quiet -- binaries; then
-            BINARY_CHANGES=0
-          else
-            BINARY_CHANGES=1
+          git add binaries/ prebuild-targets.json
+          if ! git diff --staged --quiet; then
+            git commit -m "Build prebuilt binaries for released Node ABIs"
+            git push origin HEAD:trunk
           fi
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: refresh fs-ext prebuilds
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-          Platforms:
-          - macOS: x64, arm64
-          - Linux: x64, arm64
-          - Windows: x64, arm64
-
-          Node versions: ${{ inputs.node_versions || 'ABI registry (>=20)' }}
-          Electron version: ${{ inputs.electron_version || 'Studio package.json' }}
-          Triggered by: ${{ github.actor }}"
-            git push origin trunk
-            if [ "$BINARY_CHANGES" = "1" ]; then
-              gh workflow run publish.yml --ref trunk -f version_bump=patch
-            fi
-          fi
+  publish:
+    name: Dispatch publication or retry the pending release
+    needs: [detect-upstream-targets, build, test, commit]
+    if: >-
+      always() && github.ref == 'refs/heads/trunk' &&
+      needs.detect-upstream-targets.result == 'success' &&
+      (needs.detect-upstream-targets.outputs.should_build == 'false' ||
+      (needs.build.result == 'success' && needs.test.result == 'success' && needs.commit.result == 'success'))
+    permissions:
+      actions: write
+    runs-on: ubuntu-24.04
+    steps:
+      # Keep npm authentication under publish.yml. A reusable call would
+      # authenticate as this build workflow instead, so dispatch the tested SHA.
+      - name: Dispatch the trusted publish workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ needs.commit.outputs.sha || github.sha }}
+        run: |
+          gh workflow run publish.yml --repo "$GITHUB_REPOSITORY" --ref trunk \
+            -f version_bump=patch -f only_if_needed=true -f source_ref="$SOURCE_REF"
