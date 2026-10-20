@@ -213,6 +213,7 @@ test('release version bookkeeping leaves the tested fingerprint unchanged', () =
 test('a publish rerun reuses the pending version commit instead of creating a sibling', () => {
 	withReleaseRepo((targets, git, tested) => {
 		const fs = require('fs');
+		git('config', 'core.autocrlf', 'true');
 		const pending = commitPendingRelease(targets, git);
 		git('push', 'origin', 'HEAD:trunk');
 		git('checkout', '--detach', tested);
@@ -220,7 +221,10 @@ test('a publish rerun reuses the pending version commit instead of creating a si
 		assert.match(runPrepareRelease(), /publish=true/);
 		assert.equal(git('rev-parse', 'HEAD'), pending);
 		assert.equal(JSON.parse(fs.readFileSync('package.json')).version, '2.2.15');
-		assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+		// Git can mark LF-written metadata dirty after a CRLF checkout. Stage it,
+		// as publish.yml does, before checking whether another commit is needed.
+		git('add', 'package.json', 'package-lock.json');
+		assert.equal(git('diff', '--staged', '--name-only'), '');
 		git('push', 'origin', 'HEAD:trunk');
 	});
 });
