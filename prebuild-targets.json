@@ -1,0 +1,42 @@
+[
+  {
+    "runtime": "node",
+    "version": "20.0.0",
+    "abi": "115"
+  },
+  {
+    "runtime": "node",
+    "version": "21.0.0",
+    "abi": "120"
+  },
+  {
+    "runtime": "node",
+    "version": "22.0.0",
+    "abi": "127"
+  },
+  {
+    "runtime": "node",
+    "version": "23.0.0",
+    "abi": "131"
+  },
+  {
+    "runtime": "node",
+    "version": "24.0.0",
+    "abi": "137"
+  },
+  {
+    "runtime": "node",
+    "version": "25.0.0",
+    "abi": "141"
+  },
+  {
+    "runtime": "node",
+    "version": "26.0.0",
+    "abi": "147"
+  },
+  {
+    "runtime": "electron",
+    "version": "44.7.2",
+    "abi": "149"
+  }
+]
