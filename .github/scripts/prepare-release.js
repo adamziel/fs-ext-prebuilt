@@ -5,10 +5,12 @@ const { expectedFiles, fetchJson } = require('./prebuild-targets');
 
 module.exports = { releaseAction, fingerprint };
 
+/** Prepares a tested package version, reusing a matching pending commit on reruns. */
 async function main() {
-	let pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 	const targets = JSON.parse(fs.readFileSync('prebuild-targets.json', 'utf8'));
 	const digest = fingerprint(targets);
+	reusePendingRelease(targets, digest);
+	let pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 	let published;
 	try {
 		published = await fetchJson(
@@ -45,6 +47,39 @@ async function main() {
 	fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t') + '\n');
 	setOutput('publish', 'true');
 	setOutput('version', pkg.version);
+}
+
+/**
+ * Reuses the version-only commit left by a failed publish attempt.
+ * Reruns retain the original tested source_ref. The first commit after it may
+ * be the pending version; later trunk commits can contain untested changes.
+ */
+function reusePendingRelease(targets, digest) {
+	const tested = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+	execFileSync('git', ['fetch', 'origin', 'trunk'], { stdio: 'inherit' });
+	const pending = execFileSync('git', [
+		'rev-list', '--ancestry-path', '--first-parent', '--reverse', `${tested}..FETCH_HEAD`,
+	], { encoding: 'utf8' }).trim().split(/\r?\n/)[0];
+	if (!pending) {
+		return;
+	}
+	const changed = execFileSync('git', ['diff', '--name-only', tested, pending], {
+		encoding: 'utf8',
+	}).trim().split(/\r?\n/).filter(Boolean);
+	if (changed.some((file) => !['package.json', 'package-lock.json'].includes(file))) {
+		return;
+	}
+	const pkg = JSON.parse(execFileSync('git', ['show', `${pending}:package.json`], {
+		encoding: 'utf8',
+	}));
+	if (pkg.prebuiltFingerprint !== digest) {
+		return;
+	}
+	execFileSync('git', ['checkout', '--detach', pending], { stdio: 'inherit' });
+	// The saved field alone cannot approve changes to dependencies or scripts.
+	if (fingerprint(targets) !== digest) {
+		throw new Error('Pending release does not match the tested package');
+	}
 }
 
 function releaseAction(published, digest, onlyIfNeeded) {

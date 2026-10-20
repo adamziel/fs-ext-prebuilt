@@ -137,6 +137,8 @@ compilation cannot hide a missing prebuild.
 The publisher stores a fingerprint of the binary set and runtime sources in npm
 metadata. Unchanged builds do not consume another version. If publication fails
 after the version commit, the next daily run retries that unpublished version.
+Re-running the failed publish job also reuses its pending version commit. It
+does not include newer, untested trunk changes.
 Changed sources, build settings, or dependencies require another build and test
 run, even when the ABI list is unchanged. Tags are pushed after npm publication
 succeeds.

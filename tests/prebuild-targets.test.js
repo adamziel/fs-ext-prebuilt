@@ -210,6 +210,140 @@ test('release version bookkeeping leaves the tested fingerprint unchanged', () =
 	});
 });
 
+test('a publish rerun reuses the pending version commit instead of creating a sibling', () => {
+	withReleaseRepo((targets, git, tested) => {
+		const fs = require('fs');
+		const pending = commitPendingRelease(targets, git);
+		git('push', 'origin', 'HEAD:trunk');
+		git('checkout', '--detach', tested);
+
+		assert.match(runPrepareRelease(), /publish=true/);
+		assert.equal(git('rev-parse', 'HEAD'), pending);
+		assert.equal(JSON.parse(fs.readFileSync('package.json')).version, '2.2.15');
+		assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+		git('push', 'origin', 'HEAD:trunk');
+	});
+});
+
+test('a publish rerun does not adopt newer untested trunk sources', () => {
+	withReleaseRepo((targets, git, tested) => {
+		const fs = require('fs');
+		const pending = commitPendingRelease(targets, git);
+		fs.writeFileSync('src/fs-ext.ts', 'untested trunk source');
+		git('add', 'src/fs-ext.ts');
+		git('commit', '-m', 'Change runtime source');
+		git('push', 'origin', 'HEAD:trunk');
+		git('checkout', '--detach', tested);
+
+		assert.match(runPrepareRelease(), /publish=true/);
+		assert.equal(git('rev-parse', 'HEAD'), pending);
+		assert.equal(fs.readFileSync('src/fs-ext.ts', 'utf8'), 'runtime source');
+	});
+});
+
+test('a rerun skips an already-published pending version without another bump', () => {
+	withReleaseRepo((targets, git, tested) => {
+		const { fingerprint } = require('../.github/scripts/prepare-release');
+		const pending = commitPendingRelease(targets, git);
+		git('push', 'origin', 'HEAD:trunk');
+		git('checkout', '--detach', tested);
+
+		assert.match(runPrepareRelease({ prebuiltFingerprint: fingerprint(targets) }), /publish=false/);
+		assert.equal(git('rev-parse', 'HEAD'), pending);
+		assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+	});
+});
+
+test('a stale pending fingerprint cannot approve changed package dependencies', () => {
+	withReleaseRepo((targets, git, tested) => {
+		const fs = require('fs');
+		commitPendingRelease(targets, git);
+		const pkg = JSON.parse(fs.readFileSync('package.json'));
+		pkg.dependencies.nan = '^2.28.0';
+		fs.writeFileSync('package.json', JSON.stringify(pkg));
+		git('add', 'package.json');
+		git('commit', '--amend', '--no-edit');
+		git('push', 'origin', 'HEAD:trunk');
+		git('checkout', '--detach', tested);
+
+		assert.throws(runPrepareRelease, /Pending release does not match the tested package/);
+	});
+});
+
+/** Runs release checks against a local Git remote without accessing GitHub. */
+function withReleaseRepo(check) {
+	const { execFileSync } = require('child_process');
+	const path = require('path');
+	const root = path.join(__dirname, '..');
+	const author = ['%an', '%ae'].map((format) =>
+		execFileSync('git', ['log', '-1', `--format=${format}`], {
+			cwd: root,
+			encoding: 'utf8',
+		}).trim(),
+	);
+	withBinaryTree((targets) => {
+		/** Executes Git in this fixture and returns its trimmed output. */
+		const git = (...args) =>
+			execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }).trim();
+		git('init', '--initial-branch=trunk');
+		git('config', 'user.name', author[0]);
+		git('config', 'user.email', author[1]);
+		git('config', 'commit.gpgsign', 'false');
+		git('add', '.');
+		git('commit', '-m', 'Tested package inputs');
+		git('clone', '--bare', '.', 'origin.git');
+		git('remote', 'add', 'origin', path.join(process.cwd(), 'origin.git'));
+		check(targets, git, git('rev-parse', 'HEAD'));
+	});
+}
+
+/** Records the version-only commit that remains after npm publication fails. */
+function commitPendingRelease(targets, git) {
+	const fs = require('fs');
+	const { fingerprint } = require('../.github/scripts/prepare-release');
+	const digest = fingerprint(targets);
+	for (const file of ['package.json', 'package-lock.json']) {
+		const metadata = JSON.parse(fs.readFileSync(file));
+		metadata.version = '2.2.15';
+		if (file === 'package.json') {
+			metadata.prebuiltFingerprint = digest;
+		} else {
+			metadata.packages[''].version = metadata.version;
+		}
+		fs.writeFileSync(file, JSON.stringify(metadata, null, '\t') + '\n');
+	}
+	git('add', 'package.json', 'package-lock.json');
+	git('commit', '-m', 'v2.2.15');
+	return git('rev-parse', 'HEAD');
+}
+
+/** Runs the publisher offline with supplied npm metadata for the pending version. */
+function runPrepareRelease(published) {
+	const fs = require('fs');
+	const path = require('path');
+	const { execFileSync } = require('child_process');
+	const selector = require.resolve('../.github/scripts/prebuild-targets');
+	fs.writeFileSync(
+		'fake-registry.cjs',
+		`require(${JSON.stringify(selector)}).fetchJson = async (url) => {
+			if (url.endsWith('/2.2.15')) {
+				const published = ${JSON.stringify(published)};
+				if (published) return published;
+				throw Object.assign(new Error('Not published'), { statusCode: 404 });
+			}
+			return { version: '2.2.14' };
+		};`,
+	);
+	execFileSync(process.execPath, [
+		'--require', './fake-registry.cjs',
+		require.resolve('../.github/scripts/prepare-release'),
+	], {
+		env: { ...process.env, ONLY_IF_NEEDED: 'true', GITHUB_OUTPUT: path.resolve('release-output') },
+		stdio: 'pipe',
+	});
+	return fs.readFileSync('release-output', 'utf8');
+}
+
 /** Runs a release check against a complete temporary package and binary set. */
 function withBinaryTree(check) {
 	const fs = require('fs');
@@ -224,7 +358,13 @@ function withBinaryTree(check) {
 		fs.mkdirSync('src');
 		fs.writeFileSync('prebuild-targets.json', JSON.stringify(targets, null, 2) + '\n');
 		for (const file of ['package.json', 'package-lock.json']) {
-			fs.copyFileSync(path.join(__dirname, '..', file), file);
+			const metadata = JSON.parse(fs.readFileSync(path.join(__dirname, '..', file)));
+			metadata.version = '2.2.14';
+			delete metadata.prebuiltFingerprint;
+			if (metadata.packages) {
+				metadata.packages[''].version = metadata.version;
+			}
+			fs.writeFileSync(file, JSON.stringify(metadata, null, '\t') + '\n');
 		}
 		for (const file of expectedFiles(targets)) {
 			fs.writeFileSync(`binaries/${file}`, 'native addon');
