@@ -9,7 +9,7 @@
 		"lockfileex",
 		"prebuilt"
 	],
-	"version": "2.2.16",
+	"version": "2.2.17",
 	"homepage": "https://github.com/adamziel/fs-ext-prebuilt",
 	"repository": {
 		"type": "git",
@@ -67,5 +67,5 @@
 		"tsx": "^4.21.0",
 		"typescript": "^5.9.3"
 	},
-	"prebuiltFingerprint": "08057f0c6bccf06e1a4e84d8a5e3a6a268332db10ef8c3037bf65ff698952a3c"
+	"prebuiltFingerprint": "cda037ab77b2c7496985bab3fb7d6282860abfb04586c261ef41185262ce1cc0"
 }
